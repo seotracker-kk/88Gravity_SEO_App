@@ -1142,22 +1142,46 @@ function avpNav(view, el) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('avp-'+view).style.display = 'block';
   el.classList.add('active');
-  if (view === 'tasks')    renderTasksList();
-  if (view === 'birbal')   renderAMBoardAVP('birbal');
-  if (view === 'ajay')     renderAMBoardAVP('ajay');
-  if (view === 'ambuj')    renderAMBoardAVP('ambuj');
+  if (view === 'overview')    refreshAVPOverviewData();   // always fresh from Firestore
+  if (view === 'tasks')       refreshAndRenderAllTasks(); // always fresh from Firestore
+  if (view === 'birbal')      renderAMBoardAVP('birbal');
+  if (view === 'ajay')        renderAMBoardAVP('ajay');
+  if (view === 'ambuj')       renderAMBoardAVP('ambuj');
   if (view === 'reports')     renderReports();
   if (view === 'projects')    renderProjectsList();
   if (view === 'tasklibrary') renderTaskLibraryTable();
   if (view === 'maptasks')    renderMapTasksView();
 }
 
+// Fresh Firestore fetch for Overview tab
+async function refreshAVPOverviewData() {
+  const dayK=todayStr(), wk=weekKey(), bwk=biWeekKey(), moK=monthKey();
+  // Reload templates so All Tasks count is always current
+  const tSnap = await db.collection('taskTemplates').where('active','==',true).get();
+  allTemplates = tSnap.docs.map(d=>({id:d.id,...d.data()}));
+  // Reload instances for every AM
+  for (const amId of ['birbal','ajay','ambuj']) {
+    try {
+      const iSnap = await db.collection('taskInstances')
+        .where('amId','==',amId)
+        .where('periodKey','in',[dayK, wk, bwk, moK]).get();
+      allInstances[amId] = iSnap.docs.map(d=>({id:d.id,...d.data()}));
+    } catch(e) { console.warn('overview fetch err', amId, e); }
+  }
+  renderAVPOverview();
+}
+
+// Fresh Firestore fetch for All Tasks tab
+async function refreshAndRenderAllTasks() {
+  const snap = await db.collection('taskTemplates').where('active','==',true).get();
+  allTemplates = snap.docs.map(d=>({id:d.id,...d.data()}));
+  renderTasksList();
+}
+
 async function loadTemplates() {
   const snap = await db.collection('taskTemplates').where('active','==',true).get();
   allTemplates = snap.docs.map(d => ({id:d.id,...d.data()}));
-  // Seed defaults if empty
   if (allTemplates.length === 0) await seedDefaultTasks();
-  else renderAVPOverview();
 }
 
 function subscribeAVPInstances() {
@@ -2501,10 +2525,18 @@ async function submitMapTask(e) {
     const projNames=selCbs.map(cb=>cb.dataset.name).join(', ');
     toast('✅ "'+task.name+'" mapped to: '+projNames,'success');
     resetMapForm();
-    // Refresh All Tasks list (if it's currently visible the table is live; else pre-loads data)
-    renderTasksList();
-    // Refresh Overview stats (subscribeAVPInstances will also fire when instances are created above)
+    // Force-reload all instances from Firestore and refresh Overview + All Tasks immediately
+    const dayK2=todayStr(), wk2=weekKey(), bwk2=biWeekKey(), moK2=monthKey();
+    for (const aid of ['birbal','ajay','ambuj']) {
+      try {
+        const iSnap = await db.collection('taskInstances')
+          .where('amId','==',aid)
+          .where('periodKey','in',[dayK2, wk2, bwk2, moK2]).get();
+        allInstances[aid] = iSnap.docs.map(d=>({id:d.id,...d.data()}));
+      } catch(e) {}
+    }
     renderAVPOverview();
+    renderTasksList();
   } catch(err) { toast('Error: '+err.message,'error'); }
   btn.disabled=false; btn.innerHTML='🔗 Map Task';
 }
