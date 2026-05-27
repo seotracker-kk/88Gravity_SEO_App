@@ -268,6 +268,20 @@ tr:hover td{background:var(--pale-blue)}
 .metric-value{font-size:30px;font-weight:800;margin-bottom:4px}
 .metric-label{font-size:11px;color:var(--muted);font-weight:600}
 
+
+/* ── MULTI-SELECT DROPDOWN ──────────────── */
+.multisel-wrap{position:relative;width:100%}
+.multisel-trigger{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border:2px solid #E9ECF0;border-radius:8px;font-size:13px;cursor:pointer;background:#fff;transition:border .2s;user-select:none}
+.multisel-trigger:hover,.multisel-trigger.open{border-color:var(--mid-blue)}
+.multisel-arrow{font-size:11px;color:var(--muted);transition:transform .2s}
+.multisel-trigger.open .multisel-arrow{transform:rotate(180deg)}
+.multisel-dropdown{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:2px solid var(--mid-blue);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:100;overflow:hidden}
+.multisel-item{display:flex;align-items:center;gap:10px;padding:10px 14px;font-size:13px;cursor:pointer;transition:background .15s}
+.multisel-item:hover{background:var(--pale-blue)}
+.multisel-item input[type="checkbox"]{accent-color:var(--mid-blue);width:15px;height:15px;cursor:pointer;flex-shrink:0}
+.multisel-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.multisel-tag{background:var(--pale-blue);color:var(--dark-blue);border:1.5px solid var(--light-blue);padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600}
+
 /* ── RESPONSIVE ──────────────────────────── */
 @media(max-width:900px){
   .kanban-board{grid-template-columns:1fr 1fr}
@@ -366,6 +380,31 @@ tr:hover td{background:var(--pale-blue)}
               <div class="form-row">
                 <label class="form-label">Task Details / Instructions</label>
                 <textarea class="form-textarea" id="f-detail" placeholder="What exactly should the AM/executive do?"></textarea>
+              </div>
+              <div class="form-row-2">
+                <div class="form-row">
+                  <label class="form-label">Project Name</label>
+                  <input class="form-input" id="f-proj-name" placeholder="e.g. ABC Corp">
+                </div>
+                <div class="form-row">
+                  <label class="form-label">Project Website URL</label>
+                  <input class="form-input" id="f-proj-url" placeholder="e.g. https://abccorp.com" type="url">
+                </div>
+              </div>
+              <div class="form-row">
+                <label class="form-label">Project Service Type</label>
+                <div class="multisel-wrap" id="f-service-wrap">
+                  <div class="multisel-trigger" id="f-service-trigger" onclick="toggleServiceDropdown()">
+                    <span id="f-service-label" style="color:var(--muted)">Select service types...</span>
+                    <span class="multisel-arrow">&#9662;</span>
+                  </div>
+                  <div class="multisel-dropdown" id="f-service-dropdown" style="display:none">
+                    <label class="multisel-item"><input type="checkbox" value="SEO" onchange="updateServiceLabel()"> SEO</label>
+                    <label class="multisel-item"><input type="checkbox" value="GMB" onchange="updateServiceLabel()"> GMB</label>
+                    <label class="multisel-item"><input type="checkbox" value="AI-SEO &amp; Citation" onchange="updateServiceLabel()"> AI-SEO &amp; Citation</label>
+                  </div>
+                </div>
+                <div class="multisel-tags" id="f-service-tags"></div>
               </div>
               <div class="form-row-2">
                 <div class="form-row">
@@ -1451,6 +1490,9 @@ async function submitTask(e) {
   const template = {
     name:             document.getElementById('f-name').value.trim(),
     detail:           document.getElementById('f-detail').value.trim(),
+    projectName:      document.getElementById('f-proj-name').value.trim(),
+    projectUrl:       document.getElementById('f-proj-url').value.trim(),
+    serviceTypes:     [...document.querySelectorAll('#f-service-dropdown input:checked')].map(c=>c.value),
     category:         document.getElementById('f-cat').value,
     priority:         document.getElementById('f-prio').value,
     frequency:        baseFreq,
@@ -1500,6 +1542,10 @@ function resetForm() {
   document.getElementById('f-day-row').style.display='none';
   document.getElementById('f-due-row').style.display='none';
   document.getElementById('f-projects-row').style.display='none';
+  document.querySelectorAll('#f-service-dropdown input').forEach(cb => cb.checked = false);
+  updateServiceLabel();
+  document.getElementById('f-service-dropdown').style.display = 'none';
+  document.getElementById('f-service-trigger').classList.remove('open');
 }
 
 // ================================================================
@@ -1876,6 +1922,43 @@ async function seedDefaultTasks() {
   toast(`✅ ${defaults.length} default tasks loaded!`, 'success');
   renderAVPOverview();
 }
+
+// ================================================================
+// SERVICE TYPE MULTISELECT HELPERS
+// ================================================================
+function toggleServiceDropdown() {
+  const dd      = document.getElementById('f-service-dropdown');
+  const trigger = document.getElementById('f-service-trigger');
+  const isOpen  = dd.style.display !== 'none';
+  dd.style.display = isOpen ? 'none' : 'block';
+  trigger.classList.toggle('open', !isOpen);
+}
+
+function updateServiceLabel() {
+  const checked = [...document.querySelectorAll('#f-service-dropdown input:checked')].map(c => c.value);
+  const lbl  = document.getElementById('f-service-label');
+  const tags = document.getElementById('f-service-tags');
+  if (checked.length) {
+    lbl.textContent = checked.join(', ');
+    lbl.style.color = 'var(--text)';
+    tags.innerHTML  = checked.map(v => '<span class="multisel-tag">' + v + '</span>').join('');
+  } else {
+    lbl.textContent = 'Select service types...';
+    lbl.style.color = 'var(--muted)';
+    tags.innerHTML  = '';
+  }
+}
+
+// Close dropdown on outside click
+document.addEventListener('click', function(e) {
+  const wrap = document.getElementById('f-service-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    const dd = document.getElementById('f-service-dropdown');
+    const tr = document.getElementById('f-service-trigger');
+    if (dd) dd.style.display = 'none';
+    if (tr) tr.classList.remove('open');
+  }
+});
 
 // ================================================================
 // 12. TOAST
