@@ -5,9 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>88Gravity — SEO Team Dashboard</title>
 <!-- Firebase v8 compat SDK -->
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"
+  onerror="window._fbLoadErr=true;document.getElementById('loader-status').textContent='Error: Could not load Firebase SDK. Check internet connection.';"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"
+  onerror="window._fbLoadErr=true;"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"
+  onerror="window._fbLoadErr=true;"></script>
 <style>
 :root {
   --dark-blue:#1E3A5F; --mid-blue:#2E86AB; --light-blue:#BDD5EA; --pale-blue:#E8F4F8;
@@ -242,13 +245,14 @@ tr:hover td{background:var(--pale-blue)}
 </head>
 <body>
 
-<!-- Firebase is initialized below using the v8 compat SDK -->
+<!-- Firebase config is set in the main script block below -->
 
 <!-- LOADING -->
 <div id="loader">
   <div class="logo"><span>88</span>GRAVITY</div>
-  <div class="spinner"></div>
-  <div style="font-size:13px;opacity:.7">Loading SEO Dashboard...</div>
+  <div class="spinner" id="loader-spinner"></div>
+  <div style="font-size:13px;opacity:.7" id="loader-status">Loading SEO Dashboard...</div>
+  <button id="loader-bypass-btn" onclick="forceShowLogin()" style="display:none;margin-top:16px;padding:10px 24px;background:var(--orange);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">Go to Login →</button>
 </div>
 
 <!-- LOGIN -->
@@ -556,11 +560,49 @@ const KANBAN_COLS = [
 ];
 
 // ================================================================
-// 3. FIREBASE INIT
+// 3. FIREBASE INIT — with error handling & timeout fallback
 // ================================================================
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db   = firebase.firestore();
+
+// Timeout: if onAuthStateChanged doesn't fire in 8s, show login anyway
+let _authFired = false;
+const _loaderTimeout = setTimeout(() => {
+  if (!_authFired) {
+    console.warn('Firebase onAuthStateChanged did not fire within 8s — showing login screen');
+    forceShowLogin();
+  }
+}, 8000);
+
+// Show a "bypass" button after 4s as an early escape
+setTimeout(() => {
+  if (!_authFired) {
+    const btn = document.getElementById('loader-bypass-btn');
+    const status = document.getElementById('loader-status');
+    if (btn) btn.style.display = 'block';
+    if (status) status.textContent = 'Taking longer than usual...';
+  }
+}, 4000);
+
+function forceShowLogin() {
+  clearTimeout(_loaderTimeout);
+  _authFired = true;
+  document.getElementById('loader').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+}
+
+let auth, db;
+try {
+  if (typeof firebase === 'undefined') throw new Error('Firebase SDK not loaded');
+  firebase.initializeApp(firebaseConfig);
+  auth = firebase.auth();
+  db   = firebase.firestore();
+  // Enable Firestore offline persistence
+  db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+} catch(e) {
+  console.error('Firebase init failed:', e);
+  document.getElementById('loader-status').textContent = 'Firebase error: ' + e.message;
+  document.getElementById('loader-bypass-btn').style.display = 'block';
+  document.getElementById('loader-spinner').style.display = 'none';
+}
 
 // ================================================================
 // 4. GLOBAL STATE
@@ -577,39 +619,63 @@ let unsubListeners = [];   // Firestore unsubscribe fns
 // 5. AUTH
 // ================================================================
 function signInGoogle() {
+  if (!auth) { toast("Firebase not loaded. Please refresh the page.", "error"); return; }
   const provider = new firebase.auth.GoogleAuthProvider();
   provider.setCustomParameters({ hd: "88gravity.com" });
   auth.signInWithPopup(provider).catch(err => {
-    toast("Sign-in failed: " + err.message, "error");
+    console.error('Sign-in error:', err.code, err.message);
+    if (err.code === 'auth/unauthorized-domain') {
+      toast("❌ Unauthorized domain. Go to Firebase Console → Authentication → Authorized Domains and add: " + location.hostname, "error");
+    } else if (err.code === 'auth/popup-blocked') {
+      toast("❌ Popup blocked by browser. Please allow popups for this site.", "error");
+    } else {
+      toast("Sign-in failed: " + err.message, "error");
+    }
   });
 }
 function signOut() {
   unsubListeners.forEach(fn => fn());
-  auth.signOut();
+  if (auth) auth.signOut();
 }
 
-auth.onAuthStateChanged(async user => {
-  document.getElementById('loader').style.display = 'none';
-  if (!user) {
-    showScreen('login-screen');
-    return;
-  }
-  const info = ROLE_MAP[user.email];
-  if (!info) {
-    toast("Access denied. Only @88gravity.com team members allowed.", "error");
-    auth.signOut(); return;
-  }
-  currentUser = user;
-  currentRole = info.role;
-  currentAmId = info.amId || null;
+if (auth) {
+  auth.onAuthStateChanged(async user => {
+    _authFired = true;
+    clearTimeout(_loaderTimeout);
+    document.getElementById('loader').style.display = 'none';
 
-  // Ensure user doc in Firestore
-  await db.collection('users').doc(user.uid).set({ email:user.email, name:info.name, role:info.role, amId:info.amId||null }, { merge:true });
+    if (!user) {
+      showScreen('login-screen');
+      return;
+    }
 
-  showScreen('app');
-  if (currentRole === 'avp') initAVP();
-  else initAM();
-});
+    const info = ROLE_MAP[user.email];
+    if (!info) {
+      showScreen('login-screen');
+      setTimeout(() => toast("Access denied. Only @88gravity.com team members allowed.", "error"), 300);
+      auth.signOut();
+      return;
+    }
+
+    currentUser = user;
+    currentRole = info.role;
+    currentAmId = info.amId || null;
+
+    try {
+      await db.collection('users').doc(user.uid).set(
+        { email:user.email, name:info.name, role:info.role, amId:info.amId||null },
+        { merge:true }
+      );
+    } catch(e) {
+      console.warn('Could not write user profile:', e.message);
+      // Non-fatal — continue anyway
+    }
+
+    showScreen('app');
+    if (currentRole === 'avp') initAVP();
+    else initAM();
+  });
+}
 
 function showScreen(id) {
   ['loader','login-screen','app'].forEach(s => document.getElementById(s).style.display = 'none');
