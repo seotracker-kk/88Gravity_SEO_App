@@ -2158,11 +2158,11 @@ function renderProjectsList() {
   }
   tbody.innerHTML = allProjects.map(p => {
     const amName = (p.amId && AM_CONFIG[p.amId]) ? AM_CONFIG[p.amId].name : (p.amId||'—');
-    const urlDisplay = p.url ? '<a href="' + p.url + '" target="_blank" style="color:var(--mid-blue);font-size:11px;word-break:break-all">' + p.url + '</a>' : '—';
-    return '<tr><td><strong>' + (p.name||'—') + '</strong></td><td>' + urlDisplay + '</td>' +
-      '<td><strong style="font-size:12px">' + amName + '</strong></td>' +
-      '<td>' + svcTagHtml(p.serviceTypes) + '</td>' +
-      '<td><button class="btn btn-sm btn-danger" onclick="deleteProject('' + p.id + '')">🗑</button></td></tr>';
+    const urlDisplay = p.url ? `<a href="${p.url}" target="_blank" style="color:var(--mid-blue);font-size:11px;word-break:break-all">${p.url}</a>` : '—';
+    return `<tr><td><strong>${p.name||'—'}</strong></td><td>${urlDisplay}</td>`+
+      `<td><strong style="font-size:12px">${amName}</strong></td>`+
+      `<td>${svcTagHtml(p.serviceTypes)}</td>`+
+      `<td><button class="btn btn-sm btn-danger" onclick="deleteProject('${p.id}')">🗑</button></td></tr>`;
   }).join('');
 }
 
@@ -2260,7 +2260,7 @@ function renderTaskLibraryTable() {
     '<tr><td><strong>'+t.name+'</strong>'+(t.detail?'<div style="font-size:10px;color:var(--muted);margin-top:2px">'+t.detail.substring(0,60)+'...</div>':'')+'</td>'+
     '<td><span class="badge '+(CAT_CLASS[t.category]||'')+'">'+t.category+'</span></td>'+
     '<td>'+prioHtml(t.priority)+'</td>'+
-    '<td><button class="btn btn-sm btn-danger" onclick="deleteTaskLib(''+t.id+'')">🗑</button></td></tr>'
+    `<td><button class="btn btn-sm btn-danger" onclick="deleteTaskLib('${t.id}')">🗑</button></td></tr>`
   ).join('');
 }
 
