@@ -229,6 +229,45 @@ tr:hover td{background:var(--pale-blue)}
 .alert-danger{background:var(--light-red);color:#922b21;border-left:4px solid var(--red)}
 .alert-info{background:var(--pale-blue);color:#1a5276;border-left:4px solid var(--mid-blue)}
 
+/* ── PROJECT SUMMARY CARDS ──────────────── */
+.proj-summary-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:18px}
+.proj-summary-card{background:#fff;border-radius:var(--radius);padding:15px;box-shadow:var(--shadow);cursor:pointer;transition:all .2s;border:2px solid transparent;position:relative}
+.proj-summary-card:hover{border-color:var(--mid-blue);transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,.12)}
+.proj-summary-card.expanded{border-color:var(--mid-blue);background:var(--pale-blue)}
+.proj-card-name{font-size:12px;font-weight:700;color:var(--dark-blue);margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.proj-card-stats{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted);margin-bottom:5px}
+.proj-card-bar{background:#E9ECF0;border-radius:4px;height:5px;margin-bottom:8px;overflow:hidden}
+.proj-card-fill{height:100%;border-radius:4px;transition:width .4s}
+.proj-card-badges{display:flex;gap:4px;flex-wrap:wrap}
+.proj-detail-panel{background:#fff;border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);margin-bottom:18px;border-top:3px solid var(--mid-blue);animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.proj-click-hint{text-align:right;font-size:9px;color:var(--mid-blue);margin-top:8px;opacity:.7}
+
+/* ── REPORT TABS ────────────────────────── */
+.report-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+.report-tab{background:#fff;border:2px solid #E9ECF0;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;transition:all .2s}
+.report-tab:hover{border-color:var(--mid-blue);color:var(--mid-blue)}
+.report-tab.active{background:var(--dark-blue);border-color:var(--dark-blue);color:#fff}
+
+/* ── TREND CHART ────────────────────────── */
+.trend-wrap{overflow-x:auto;padding-bottom:8px}
+.trend-chart{display:flex;align-items:flex-end;gap:10px;height:180px;padding:0 4px;min-width:400px}
+.trend-bar-group{display:flex;gap:3px;align-items:flex-end;flex:1;position:relative}
+.trend-bar-group-label{position:absolute;bottom:-22px;left:50%;transform:translateX(-50%);font-size:9px;color:var(--muted);white-space:nowrap}
+.trend-bar{border-radius:4px 4px 0 0;min-width:16px;flex:1;transition:height .5s;position:relative;cursor:pointer}
+.trend-bar:hover{opacity:.85}
+.trend-bar::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:#1A1A2E;color:#fff;padding:3px 7px;border-radius:5px;font-size:10px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .15s}
+.trend-bar:hover::after{opacity:1}
+.trend-legend{display:flex;gap:16px;margin-top:30px;flex-wrap:wrap;padding:0 4px}
+.trend-legend-item{display:flex;align-items:center;gap:6px;font-size:11px}
+.trend-legend-dot{width:12px;height:12px;border-radius:3px;flex-shrink:0}
+
+/* ── REPORT METRIC CARDS ─────────────────── */
+.report-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:18px}
+.metric-card{background:#fff;border-radius:var(--radius);padding:16px;text-align:center;box-shadow:var(--shadow)}
+.metric-value{font-size:30px;font-weight:800;margin-bottom:4px}
+.metric-label{font-size:11px;color:var(--muted);font-weight:600}
+
 /* ── RESPONSIVE ──────────────────────────── */
 @media(max-width:900px){
   .kanban-board{grid-template-columns:1fr 1fr}
@@ -430,11 +469,25 @@ tr:hover td{background:var(--pale-blue)}
         <div id="avp-ambuj"  class="avp-view" style="display:none"></div>
 
         <div id="avp-reports" class="avp-view" style="display:none">
-          <div class="page-header"><h1>📈 Reports</h1><p>Monthly performance summary across all projects.</p></div>
-          <div class="card">
-            <div class="card-title">Completion Rates This Week</div>
-            <div id="reports-content"><div class="empty-state"><div class="icon">📊</div>Loading report data...</div></div>
+          <div class="page-header"><h1>📈 Reports</h1><p>Month-on-month performance across all AMs, projects & categories.</p></div>
+          <div class="card" style="padding:14px 20px;margin-bottom:14px">
+            <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+              <label style="font-size:13px;font-weight:700;color:var(--dark-blue)">📅 View Period:</label>
+              <select class="form-select" id="report-month-sel" style="width:210px" onchange="onReportMonthChange()"></select>
+            </div>
           </div>
+          <div class="report-tabs">
+            <button class="report-tab active" data-tab="overview" onclick="switchReportTab('overview',this)">📊 Overview</button>
+            <button class="report-tab" data-tab="byam" onclick="switchReportTab('byam',this)">👥 By AM</button>
+            <button class="report-tab" data-tab="byproject" onclick="switchReportTab('byproject',this)">📁 By Project</button>
+            <button class="report-tab" data-tab="bycategory" onclick="switchReportTab('bycategory',this)">🏷️ By Category</button>
+            <button class="report-tab" data-tab="trend" onclick="switchReportTab('trend',this)">📈 12-Month Trend</button>
+          </div>
+          <div id="report-tab-overview"></div>
+          <div id="report-tab-byam" style="display:none"></div>
+          <div id="report-tab-byproject" style="display:none"></div>
+          <div id="report-tab-bycategory" style="display:none"></div>
+          <div id="report-tab-trend" style="display:none"></div>
         </div>
       </main>
     </div>
@@ -765,6 +818,7 @@ async function ensureInstances(amId, projects, templates) {
         detail: t.detail||'', category: t.category||'', frequency: freq,
         day: t.day||'', due: t.due||'', priority: t.priority||'medium',
         periodKey: freq==='daily'?dayK : freq==='weekly'?wk : freq==='biweekly'?bwk : moK,
+        calendarMonth: moK,
         status: 'Not Started', notes: '', completedAt: null, updatedBy: null,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       }, { merge: false });
@@ -930,30 +984,107 @@ function renderAMBoardAVP(amId) {
   const el = document.getElementById('avp-'+amId);
   const cfg = AM_CONFIG[amId];
   const inst = allInstances[amId] || [];
-  const grouped = {};
-  inst.forEach(t => { if (!grouped[t.project]) grouped[t.project]=[]; grouped[t.project].push(t); });
-  let html = `<div class="page-header"><h1>👤 ${cfg.name}</h1><p>${cfg.email} · ${cfg.projects.length} Projects</p></div>`;
-  cfg.projects.forEach(proj => {
-    const tasks = grouped[proj] || [];
-    const done = tasks.filter(t=>t.status==='Completed').length;
-    const pct = tasks.length ? Math.round(done/tasks.length*100) : 0;
-    html += `<div class="card">
-      <div class="card-title">${proj} <span style="font-size:12px;color:var(--muted)">${done}/${tasks.length} · ${pct}%</span></div>
-      ${tasks.length === 0 ? '<div class="empty-state" style="padding:10px"><p>No tasks generated yet</p></div>' :
-        `<div class="table-wrap"><table><thead><tr><th>Task</th><th>Freq</th><th>Day/Due</th><th>Cat</th><th>Status</th></tr></thead><tbody>
-          ${tasks.map(t=>`<tr>
-            <td><strong>${t.name}</strong>${t.detail?`<div style="font-size:10px;color:var(--muted)">${t.detail.substring(0,60)}${t.detail.length>60?'...':''}</div>`:''}
-            </td>
-            <td><span class="freq-pill fp-${t.frequency}">${t.frequency}</span></td>
-            <td style="font-size:11px">${t.day||t.due||'—'}</td>
+  const done = inst.filter(t=>t.status==='Completed').length;
+  const inprog = inst.filter(t=>t.status==='In Progress').length;
+  const overdue = inst.filter(t=>t.status==='Overdue').length;
+  const pct = inst.length ? Math.round(done/inst.length*100) : 0;
+  const barColor = pct>=80?'var(--green)':pct>=50?'var(--yellow)':'var(--orange)';
+
+  let html = `
+    <div class="page-header"><h1>👤 ${cfg.name}</h1><p>${cfg.email} · ${cfg.projects.length} Projects · ${inst.length} tasks this period</p></div>
+    <div class="stats-row" style="margin-bottom:20px">
+      <div class="stat-box" style="border-top-color:var(--dark-blue)"><div class="n" style="color:var(--dark-blue)">${inst.length}</div><div class="l">Total Tasks</div></div>
+      <div class="stat-box" style="border-top-color:var(--green)"><div class="n" style="color:var(--green)">${done}</div><div class="l">Completed</div></div>
+      <div class="stat-box" style="border-top-color:var(--yellow)"><div class="n" style="color:var(--yellow)">${inprog}</div><div class="l">In Progress</div></div>
+      <div class="stat-box" style="border-top-color:var(--red)"><div class="n" style="color:var(--red)">${overdue}</div><div class="l">Overdue</div></div>
+      <div class="stat-box" style="border-top-color:var(--mid-blue)"><div class="n" style="color:var(--mid-blue)">${pct}%</div><div class="l">Completion</div></div>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">👆 Click a project card to view its tasks</div>
+    <div class="proj-summary-grid" id="psm-${amId}">`;
+
+  cfg.projects.forEach((proj, idx) => {
+    const tasks = inst.filter(t=>t.project===proj);
+    const pdone = tasks.filter(t=>t.status==='Completed').length;
+    const pinprog = tasks.filter(t=>t.status==='In Progress').length;
+    const povr = tasks.filter(t=>t.status==='Overdue').length;
+    const ppct = tasks.length ? Math.round(pdone/tasks.length*100) : 0;
+    const pbar = ppct>=80?'var(--green)':ppct>=50?'var(--yellow)':ppct>0?'var(--orange)':'#BDC3C7';
+    html += `
+      <div class="proj-summary-card" id="psc-${amId}-${idx}" onclick="toggleProjDetail('${amId}',${idx})">
+        <div class="proj-card-name">📁 ${proj}</div>
+        <div class="proj-card-stats">
+          <span style="font-size:10px">${tasks.length} tasks</span>
+          <strong style="color:${pbar};font-size:13px">${ppct}%</strong>
+        </div>
+        <div class="proj-card-bar"><div class="proj-card-fill" style="width:${ppct}%;background:${pbar}"></div></div>
+        <div class="proj-card-badges">
+          <span style="background:#D5F5E3;color:#1e8449;font-size:9px;padding:2px 6px;border-radius:8px;font-weight:700">✅ ${pdone}</span>
+          ${pinprog?`<span style="background:#FEF9E7;color:#9a7d0a;font-size:9px;padding:2px 6px;border-radius:8px;font-weight:700">🔄 ${pinprog}</span>`:''}
+          ${povr?`<span style="background:#FADBD8;color:#922b21;font-size:9px;padding:2px 6px;border-radius:8px;font-weight:700">🚨 ${povr}</span>`:''}
+        </div>
+        <div class="proj-click-hint">tap to expand ↓</div>
+      </div>`;
+  });
+
+  html += `</div><div id="ppanel-${amId}" class="proj-detail-panel" style="display:none"></div>`;
+  el.innerHTML = html;
+}
+
+function toggleProjDetail(amId, projIdx) {
+  const cfg = AM_CONFIG[amId];
+  const proj = cfg.projects[projIdx];
+  const inst = allInstances[amId] || [];
+  const tasks = inst.filter(t=>t.project===proj);
+  const panel = document.getElementById(`ppanel-${amId}`);
+  const card  = document.getElementById(`psc-${amId}-${projIdx}`);
+  const isOpen = card.classList.contains('expanded');
+
+  document.querySelectorAll(`#psm-${amId} .proj-summary-card`).forEach(c=>c.classList.remove('expanded'));
+  if (isOpen) { panel.style.display='none'; return; }
+
+  card.classList.add('expanded');
+
+  if (!tasks.length) {
+    panel.innerHTML = `<div class="empty-state"><div class="icon">📋</div><p>No tasks generated for <strong>${proj}</strong> yet.</p></div>`;
+    panel.style.display='block';
+    return;
+  }
+
+  const done = tasks.filter(t=>t.status==='Completed').length;
+  const pct  = tasks.length ? Math.round(done/tasks.length*100) : 0;
+  const groups = {daily:[],weekly:[],biweekly:[],monthly:[]};
+  tasks.forEach(t=>{ (groups[t.frequency]||groups.daily).push(t); });
+  const freqLabels = {daily:'🗓️ Daily',weekly:'📆 Weekly',biweekly:'🔁 Biweekly',monthly:'📅 Monthly'};
+
+  let html = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+      <h3 style="font-size:15px;font-weight:700;color:var(--dark-blue)">📁 ${proj}</h3>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:12px;color:var(--muted)">${done}/${tasks.length} completed</span>
+        <div class="proj-bar" style="width:90px"><div class="proj-bar-fill" style="width:${pct}%"></div></div>
+        <strong style="color:var(--green);font-size:13px">${pct}%</strong>
+      </div>
+    </div>`;
+
+  Object.entries(groups).forEach(([freq, arr]) => {
+    if (!arr.length) return;
+    html += `
+      <div style="margin-bottom:16px">
+        <div style="font-size:11px;font-weight:700;color:#fff;background:var(--dark-blue);padding:5px 12px;border-radius:6px;margin-bottom:8px;display:inline-block">${freqLabels[freq]} (${arr.length})</div>
+        <div class="table-wrap"><table><thead><tr><th>Task</th><th>Category</th><th>Day/Due</th><th>Status</th></tr></thead><tbody>
+          ${arr.map(t=>`<tr>
+            <td><strong style="font-size:12px">${t.name}</strong>${t.detail?`<div style="font-size:10px;color:var(--muted);margin-top:2px">${t.detail.substring(0,70)}${t.detail.length>70?'...':''}</div>`:''}</td>
             <td><span class="badge ${CAT_CLASS[t.category]||''}">${t.category}</span></td>
+            <td style="font-size:11px;white-space:nowrap">${t.day||t.due||'—'}</td>
             <td><span class="badge ${STATUS_CLASS[t.status]||''}">${t.status}</span></td>
           </tr>`).join('')}
-        </tbody></table></div>`
-      }
-    </div>`;
+        </tbody></table></div>
+      </div>`;
   });
-  el.innerHTML = html;
+
+  panel.innerHTML = html;
+  panel.style.display='block';
+  setTimeout(()=>panel.scrollIntoView({behavior:'smooth',block:'nearest'}),50);
 }
 
 function renderTasksList() {
@@ -991,18 +1122,264 @@ async function deleteTemplate(id) {
   toast('Task deactivated', 'success');
 }
 
+// ================================================================
+// REPORTS ENGINE — Historical month-on-month
+// ================================================================
+function initReportMonthSelector() {
+  const sel = document.getElementById('report-month-sel');
+  if (!sel || sel.options.length > 0) return;
+  const now = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const label = d.toLocaleDateString('en-IN', {month:'long', year:'numeric'});
+    const opt = document.createElement('option');
+    opt.value = key; opt.textContent = label + (i===0?' (Current)':'');
+    sel.appendChild(opt);
+  }
+}
+
+function onReportMonthChange() {
+  const activeBtn = document.querySelector('.report-tab.active');
+  const tab = activeBtn?.dataset?.tab || 'overview';
+  switchReportTab(tab, activeBtn);
+}
+
+function switchReportTab(tab, btn) {
+  document.querySelectorAll('.report-tab').forEach(b=>b.classList.remove('active'));
+  if (btn) { btn.classList.add('active'); btn.dataset.tab = tab; }
+  ['overview','byam','byproject','bycategory','trend'].forEach(t => {
+    const el = document.getElementById(`report-tab-${t}`);
+    if (el) el.style.display = t===tab ? 'block' : 'none';
+  });
+  const mk = document.getElementById('report-month-sel')?.value || monthKey();
+  loadAndRenderReportTab(tab, mk);
+}
+
 function renderReports() {
-  const el = document.getElementById('reports-content');
-  const rows = ['birbal','ajay','ambuj'].map(amId => {
+  initReportMonthSelector();
+  const mk = document.getElementById('report-month-sel')?.value || monthKey();
+  loadAndRenderReportTab('overview', mk);
+}
+
+function getPeriodsForMonth(mk) {
+  const [yr, mo] = mk.split('-').map(Number);
+  const keys = new Set([mk]);
+  const days = new Date(yr, mo, 0).getDate();
+  for (let d=1; d<=days; d++) keys.add(`${mk}-${String(d).padStart(2,'0')}`);
+  for (let d=1; d<=days; d++) {
+    const dt = new Date(yr, mo-1, d);
+    keys.add(`${yr}-W${String(getWeekNum(dt)).padStart(2,'0')}`);
+    keys.add(`BW-${Math.ceil(getWeekNum(dt)/2)}-${yr}`);
+  }
+  return [...keys];
+}
+
+async function queryInstancesForMonth(amId, mk) {
+  const periods = getPeriodsForMonth(mk);
+  // Firestore 'in' max 10 — batch into chunks
+  const chunks = [];
+  for (let i=0; i<periods.length; i+=10) chunks.push(periods.slice(i,i+10));
+  const results = new Map();
+  for (const chunk of chunks) {
+    try {
+      const snap = await db.collection('taskInstances')
+        .where('amId','==',amId).where('periodKey','in',chunk).get();
+      snap.docs.forEach(d=>results.set(d.id,{id:d.id,...d.data()}));
+    } catch(e) { console.warn('chunk query err',e); }
+  }
+  // Also try calendarMonth field (newer instances)
+  try {
+    const snap2 = await db.collection('taskInstances')
+      .where('amId','==',amId).where('calendarMonth','==',mk).get();
+    snap2.docs.forEach(d=>results.set(d.id,{id:d.id,...d.data()}));
+  } catch(e) {}
+  return [...results.values()];
+}
+
+async function loadAndRenderReportTab(tab, mk) {
+  const tabEl = document.getElementById(`report-tab-${tab}`);
+  if (!tabEl) return;
+  if (tab !== 'trend') {
+    tabEl.innerHTML = `<div class="empty-state"><div class="icon">⏳</div><p>Loading data for this period...</p></div>`;
+    let allInst = [];
+    for (const amId of ['birbal','ajay','ambuj']) {
+      const inst = await queryInstancesForMonth(amId, mk);
+      allInst.push(...inst);
+    }
+    if (tab==='overview')   renderReportOverview(allInst, mk, tabEl);
+    if (tab==='byam')       renderReportByAM(allInst, mk, tabEl);
+    if (tab==='byproject')  renderReportByProject(allInst, mk, tabEl);
+    if (tab==='bycategory') renderReportByCategory(allInst, mk, tabEl);
+  } else {
+    renderTrendChart(tabEl);
+  }
+}
+
+function renderReportOverview(instances, mk, el) {
+  const total = instances.length, done = instances.filter(t=>t.status==='Completed').length;
+  const pct = total ? Math.round(done/total*100) : 0;
+  const overdue = instances.filter(t=>t.status==='Overdue').length;
+  const inp = instances.filter(t=>t.status==='In Progress').length;
+
+  let html = `<div class="report-metrics">
+    <div class="metric-card"><div class="metric-value" style="color:var(--dark-blue)">${total}</div><div class="metric-label">Total Tasks</div></div>
+    <div class="metric-card"><div class="metric-value" style="color:var(--green)">${done}</div><div class="metric-label">Completed</div></div>
+    <div class="metric-card"><div class="metric-value" style="color:var(--orange)">${total-done}</div><div class="metric-label">Pending</div></div>
+    <div class="metric-card"><div class="metric-value" style="color:var(--red)">${overdue}</div><div class="metric-label">Overdue</div></div>
+    <div class="metric-card"><div class="metric-value" style="color:var(--mid-blue)">${pct}%</div><div class="metric-label">Completion Rate</div></div>
+  </div>`;
+
+  html += `<div class="card"><div class="card-title">👥 AM Performance — ${mk}</div>`;
+  ['birbal','ajay','ambuj'].forEach(amId => {
     const cfg = AM_CONFIG[amId];
-    const inst = allInstances[amId] || [];
-    const done = inst.filter(t=>t.status==='Completed').length;
-    const total = inst.length;
-    const pct = total ? Math.round(done/total*100) : 0;
-    const bar = `<div class="prog-wrap" style="width:150px"><div class="prog-bar" style="width:${pct}%"></div></div>`;
-    return `<tr><td><strong>${cfg.name}</strong></td><td>${total}</td><td>${done}</td><td>${total-done}</td><td>${pct}%</td><td>${bar}</td></tr>`;
-  }).join('');
-  el.innerHTML = `<div class="table-wrap"><table><thead><tr><th>AM</th><th>Total Tasks</th><th>Completed</th><th>Pending</th><th>Rate</th><th>Progress</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    const ai = instances.filter(t=>t.amId===amId);
+    const ad = ai.filter(t=>t.status==='Completed').length;
+    const ap = ai.length ? Math.round(ad/ai.length*100) : 0;
+    const bc = ap>=80?'var(--green)':ap>=50?'var(--yellow)':'var(--orange)';
+    html += `<div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:13px">
+        <strong>${cfg.name}</strong>
+        <span>${ad}/${ai.length} tasks · <strong style="color:${bc}">${ap}%</strong></span>
+      </div>
+      <div class="prog-wrap"><div class="prog-bar" style="width:${ap}%;background:${bc}"></div></div>
+    </div>`;
+  });
+  html += `</div>`;
+  el.innerHTML = html;
+}
+
+function renderReportByAM(instances, mk, el) {
+  let html = '';
+  ['birbal','ajay','ambuj'].forEach(amId => {
+    const cfg = AM_CONFIG[amId];
+    const ai = instances.filter(t=>t.amId===amId);
+    const done = ai.filter(t=>t.status==='Completed').length;
+    const pct = ai.length ? Math.round(done/ai.length*100) : 0;
+    const bc = pct>=80?'var(--green)':pct>=50?'var(--yellow)':'var(--orange)';
+    const sc = s => ai.filter(t=>t.status===s).length;
+    html += `<div class="card">
+      <div class="card-title">🧑‍💼 ${cfg.name} <span style="font-size:11px;color:var(--muted);font-weight:400">${cfg.email}</span>
+        <span style="margin-left:auto;font-size:13px"><strong style="color:${bc}">${pct}%</strong> done</span></div>
+      <div class="stats-row" style="margin-bottom:12px">
+        <div class="stat-box" style="border-top-color:var(--dark-blue);padding:10px"><div class="n" style="font-size:20px;color:var(--dark-blue)">${ai.length}</div><div class="l">Total</div></div>
+        <div class="stat-box" style="border-top-color:var(--green);padding:10px"><div class="n" style="font-size:20px;color:var(--green)">${sc('Completed')}</div><div class="l">Done</div></div>
+        <div class="stat-box" style="border-top-color:var(--yellow);padding:10px"><div class="n" style="font-size:20px;color:var(--yellow)">${sc('In Progress')}</div><div class="l">In Progress</div></div>
+        <div class="stat-box" style="border-top-color:var(--orange);padding:10px"><div class="n" style="font-size:20px;color:var(--orange)">${sc('Pending Review')}</div><div class="l">Review</div></div>
+        <div class="stat-box" style="border-top-color:var(--red);padding:10px"><div class="n" style="font-size:20px;color:var(--red)">${sc('Overdue')}</div><div class="l">Overdue</div></div>
+      </div>
+      <div class="prog-wrap"><div class="prog-bar" style="width:${pct}%;background:${bc}"></div></div>
+    </div>`;
+  });
+  el.innerHTML = html || `<div class="empty-state"><div class="icon">📊</div><p>No data for this period.</p></div>`;
+}
+
+function renderReportByProject(instances, mk, el) {
+  let html = '';
+  ['birbal','ajay','ambuj'].forEach(amId => {
+    const cfg = AM_CONFIG[amId];
+    const ai = instances.filter(t=>t.amId===amId);
+    if (!ai.length) return;
+    html += `<div class="card"><div class="card-title">🧑‍💼 ${cfg.name} — Projects</div><div class="proj-summary-grid">`;
+    cfg.projects.forEach(proj => {
+      const tasks = ai.filter(t=>t.project===proj);
+      if (!tasks.length) return;
+      const done = tasks.filter(t=>t.status==='Completed').length;
+      const pct = Math.round(done/tasks.length*100);
+      const bc = pct>=80?'var(--green)':pct>=50?'var(--yellow)':'var(--orange)';
+      html += `<div class="proj-summary-card" style="cursor:default">
+        <div class="proj-card-name">${proj}</div>
+        <div class="proj-card-stats"><span>${tasks.length} tasks</span><strong style="color:${bc}">${pct}%</strong></div>
+        <div class="proj-card-bar"><div class="proj-card-fill" style="width:${pct}%;background:${bc}"></div></div>
+        <div class="proj-card-badges">
+          <span style="background:#D5F5E3;color:#1e8449;font-size:9px;padding:2px 6px;border-radius:8px;font-weight:700">✅ ${done} done</span>
+        </div>
+      </div>`;
+    });
+    html += `</div></div>`;
+  });
+  el.innerHTML = html || `<div class="empty-state"><div class="icon">📁</div><p>No project data for this period.</p></div>`;
+}
+
+function renderReportByCategory(instances, mk, el) {
+  const cats = ['Technical','On-Page','Off-Page','Analytics','Client','Research','AI-SEO','Reporting'];
+  let html = `<div class="card"><div class="card-title">🏷️ By Category — ${mk}</div>
+    <div class="table-wrap"><table><thead><tr><th>Category</th><th>Total</th><th>Completed</th><th>Pending</th><th>Rate</th><th>Progress</th></tr></thead><tbody>`;
+  cats.forEach(cat => {
+    const ci = instances.filter(t=>t.category===cat);
+    if (!ci.length) return;
+    const done = ci.filter(t=>t.status==='Completed').length;
+    const pct = Math.round(done/ci.length*100);
+    const bc = pct>=80?'var(--green)':pct>=50?'var(--yellow)':'var(--orange)';
+    html += `<tr>
+      <td><span class="badge ${CAT_CLASS[cat]||''}">${cat}</span></td>
+      <td>${ci.length}</td><td>${done}</td><td>${ci.length-done}</td>
+      <td><strong style="color:${bc}">${pct}%</strong></td>
+      <td><div class="prog-wrap" style="width:100px;margin:0"><div class="prog-bar" style="width:${pct}%;background:${bc}"></div></div></td>
+    </tr>`;
+  });
+  html += `</tbody></table></div></div>`;
+  el.innerHTML = html;
+}
+
+async function renderTrendChart(el) {
+  el.innerHTML = `<div class="empty-state"><div class="icon">⏳</div><p>Loading 12-month trend data...</p></div>`;
+  const now = new Date();
+  const months = [];
+  for (let i=11; i>=0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    months.push({
+      key: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`,
+      label: d.toLocaleDateString('en-IN',{month:'short',year:'2-digit'})
+    });
+  }
+
+  const amColors = {birbal:'#2E86AB', ajay:'#1ABC9C', ambuj:'#9B59B6'};
+  const trendData = {};
+  for (const amId of ['birbal','ajay','ambuj']) {
+    trendData[amId] = {};
+    for (const {key} of months) {
+      const inst = await queryInstancesForMonth(amId, key);
+      const done = inst.filter(t=>t.status==='Completed').length;
+      trendData[amId][key] = inst.length ? Math.round(done/inst.length*100) : 0;
+    }
+  }
+
+  // Bar chart
+  let html = `<div class="card"><div class="card-title">📈 12-Month Completion Trend</div>
+    <div class="trend-wrap"><div class="trend-chart">`;
+  months.forEach(({key, label}) => {
+    html += `<div class="trend-bar-group">`;
+    ['birbal','ajay','ambuj'].forEach(amId => {
+      const pct = trendData[amId][key]||0;
+      const h = Math.max(pct*1.5, pct>0?6:2);
+      const name = AM_CONFIG[amId].name.split(' ')[0];
+      html += `<div class="trend-bar" style="height:${h}px;background:${amColors[amId]}" data-tip="${name}: ${pct}%"></div>`;
+    });
+    html += `<span class="trend-bar-group-label">${label}</span></div>`;
+  });
+  html += `</div></div>
+    <div class="trend-legend">`;
+  ['birbal','ajay','ambuj'].forEach(amId => {
+    html += `<div class="trend-legend-item"><div class="trend-legend-dot" style="background:${amColors[amId]}"></div><span>${AM_CONFIG[amId].name}</span></div>`;
+  });
+  html += `</div></div>`;
+
+  // Data table
+  html += `<div class="card"><div class="card-title">📊 Month-on-Month Data Table</div>
+    <div class="table-wrap"><table>
+    <thead><tr><th>AM</th>${months.map(m=>`<th style="text-align:center">${m.label}</th>`).join('')}</tr></thead><tbody>`;
+  ['birbal','ajay','ambuj'].forEach(amId => {
+    html += `<tr><td><strong>${AM_CONFIG[amId].name}</strong></td>`;
+    months.forEach(({key}) => {
+      const pct = trendData[amId][key];
+      const bc = pct>=80?'var(--green)':pct>=50?'var(--yellow)':pct>0?'var(--orange)':'var(--muted)';
+      html += `<td style="text-align:center"><strong style="color:${bc}">${pct}%</strong></td>`;
+    });
+    html += `</tr>`;
+  });
+  html += `</tbody></table></div></div>`;
+  el.innerHTML = html;
 }
 
 function checkDeadlineAlerts() {
