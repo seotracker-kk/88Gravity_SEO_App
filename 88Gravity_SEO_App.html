@@ -588,9 +588,37 @@ tr:hover td{background:var(--pale-blue)}
                     </select>
                   </div>
                 </div>
+                <div class="form-row-2">
+                  <div class="form-row">
+                    <label class="form-label">Default Frequency</label>
+                    <select class="form-select" id="tlib-freq" onchange="onTlibFreqChange()">
+                      <option value="">— optional —</option>
+                      <option value="daily-everyday">Daily – Every Day</option>
+                      <option value="daily-monday">Daily – Monday</option>
+                      <option value="daily-tuesday">Daily – Tuesday</option>
+                      <option value="daily-wednesday">Daily – Wednesday</option>
+                      <option value="daily-thursday">Daily – Thursday</option>
+                      <option value="daily-friday">Daily – Friday</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="biweekly">Biweekly</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                  </div>
+                  <div class="form-row" id="tlib-day-row" style="display:none">
+                    <label class="form-label">Day of Week</label>
+                    <select class="form-select" id="tlib-day">
+                      <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
+                      <option>Thursday</option><option>Friday</option>
+                    </select>
+                  </div>
+                  <div class="form-row" id="tlib-due-row" style="display:none">
+                    <label class="form-label">Due / Timing</label>
+                    <input class="form-input" id="tlib-due" placeholder="e.g. By 26th, 1st Monday">
+                  </div>
+                </div>
                 <div style="display:flex;gap:10px;margin-top:8px">
                   <button type="submit" class="btn btn-primary" id="tlib-submit-btn">Add to Library</button>
-                  <button type="button" class="btn btn-outline" onclick="document.getElementById('tasklibrary-form').reset()">Clear</button>
+                  <button type="button" class="btn btn-outline" onclick="resetTlibForm()">Clear</button>
                 </div>
               </form>
             </div>
@@ -598,8 +626,8 @@ tr:hover td{background:var(--pale-blue)}
             <div class="card">
               <div class="card-title">📋 Task Library <span id="tlib-count" style="font-size:11px;font-weight:400;color:var(--muted)"></span></div>
               <div class="table-wrap">
-                <table><thead><tr><th>Task Name</th><th>Category</th><th>Priority</th><th></th></tr></thead>
-                <tbody id="tasklibrary-table-body"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">No tasks in library yet.</td></tr></tbody>
+                <table><thead><tr><th>Task Name</th><th>Category</th><th>Priority</th><th>Frequency</th><th>Day/Due</th><th></th></tr></thead>
+                <tbody id="tasklibrary-table-body"><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">No tasks in library yet.</td></tr></tbody>
                 </table>
               </div>
             </div>
@@ -907,6 +935,7 @@ let allTemplates = [];     // Cache of task templates
 let allProjects  = [];      // Firestore projects
 let taskLibrary  = [];      // Simple task library
 let allInstances = {};     // AVP: { amId: [instances] }
+let myProjects   = [];      // AM: projects from Firestore
 let unsubListeners = [];   // Firestore unsubscribe fns
 
 // ================================================================
@@ -1236,8 +1265,10 @@ function renderAMBoardAVP(amId) {
   const pct = inst.length ? Math.round(done/inst.length*100) : 0;
   const barColor = pct>=80?'var(--green)':pct>=50?'var(--yellow)':'var(--orange)';
 
+  const amProjList = allProjects.filter(p=>p.amId===amId).map(p=>p.name);
+  const projList = amProjList.length ? amProjList : cfg.projects;
   let html = `
-    <div class="page-header"><h1>👤 ${cfg.name}</h1><p>${cfg.email} · ${cfg.projects.length} Projects · ${inst.length} tasks this period</p></div>
+    <div class="page-header"><h1>👤 ${cfg.name}</h1><p>${cfg.email} · ${projList.length} Projects · ${inst.length} tasks this period</p></div>
     <div class="stats-row" style="margin-bottom:20px">
       <div class="stat-box" style="border-top-color:var(--dark-blue)"><div class="n" style="color:var(--dark-blue)">${inst.length}</div><div class="l">Total Tasks</div></div>
       <div class="stat-box" style="border-top-color:var(--green)"><div class="n" style="color:var(--green)">${done}</div><div class="l">Completed</div></div>
@@ -1248,7 +1279,7 @@ function renderAMBoardAVP(amId) {
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px">👆 Click a project card to view its tasks</div>
     <div class="proj-summary-grid" id="psm-${amId}">`;
 
-  cfg.projects.forEach((proj, idx) => {
+  projList.forEach((proj, idx) => {
     const tasks = inst.filter(t=>t.project===proj);
     const pdone = tasks.filter(t=>t.status==='Completed').length;
     const pinprog = tasks.filter(t=>t.status==='In Progress').length;
@@ -1278,7 +1309,9 @@ function renderAMBoardAVP(amId) {
 
 function toggleProjDetail(amId, projIdx) {
   const cfg = AM_CONFIG[amId];
-  const proj = cfg.projects[projIdx];
+  const amProjList2 = allProjects.filter(p=>p.amId===amId).map(p=>p.name);
+  const projList2 = amProjList2.length ? amProjList2 : cfg.projects;
+  const proj = projList2[projIdx];
   const inst = allInstances[amId] || [];
   const tasks = inst.filter(t=>t.project===proj);
   const panel = document.getElementById(`ppanel-${amId}`);
@@ -1317,12 +1350,15 @@ function toggleProjDetail(amId, projIdx) {
     html += `
       <div style="margin-bottom:16px">
         <div style="font-size:11px;font-weight:700;color:#fff;background:var(--dark-blue);padding:5px 12px;border-radius:6px;margin-bottom:8px;display:inline-block">${freqLabels[freq]} (${arr.length})</div>
-        <div class="table-wrap"><table><thead><tr><th>Task</th><th>Category</th><th>Day/Due</th><th>Status</th></tr></thead><tbody>
+        <div class="table-wrap"><table><thead><tr><th>Task</th><th>Category</th><th>Day/Due</th><th>Status</th><th></th></tr></thead><tbody>
           ${arr.map(t=>`<tr>
             <td><strong style="font-size:12px">${t.name}</strong>${t.detail?`<div style="font-size:10px;color:var(--muted);margin-top:2px">${t.detail.substring(0,70)}${t.detail.length>70?'...':''}</div>`:''}</td>
             <td><span class="badge ${CAT_CLASS[t.category]||''}">${t.category}</span></td>
             <td style="font-size:11px;white-space:nowrap">${t.day||t.due||'—'}</td>
             <td><span class="badge ${STATUS_CLASS[t.status]||''}">${t.status}</span></td>
+            <td style="white-space:nowrap">
+              <button title="Delete" style="background:none;border:none;font-size:13px;cursor:pointer" onclick="avpDeleteInstance('${amId}','${t.id}')">🗑</button>
+            </td>
           </tr>`).join('')}
         </tbody></table></div>
       </div>`;
@@ -1764,13 +1800,20 @@ async function initAM() {
   document.getElementById('am-display-name').textContent  = cfg.name;
   document.getElementById('am-display-email').textContent = cfg.email;
 
+  // Load projects from Firestore (fall back to AM_CONFIG if none)
+  try {
+    const pSnap = await db.collection('projects').where('amId','==',currentAmId).get();
+    const fsProjects = pSnap.docs.map(d=>d.data().name).filter(Boolean);
+    myProjects = fsProjects.length ? fsProjects : [...cfg.projects];
+  } catch(e) { myProjects = [...cfg.projects]; }
+
   // Load templates and generate instances
   const snap = await db.collection('taskTemplates')
     .where('assignedToAMs','array-contains',currentAmId)
     .where('active','==',true).get();
   const templates = snap.docs.map(d=>({id:d.id,...d.data()}));
 
-  await ensureInstances(currentAmId, cfg.projects, templates);
+  await ensureInstances(currentAmId, myProjects, templates);
   subscribeAMInstances();
   populateKBFilter();
   populateMTProjFilter();
@@ -1851,9 +1894,13 @@ function taskRowHTML(t) {
         ${t.day?`<span class="day-pill dp-${t.day.replace(' ','')}">${t.day}</span>`:''}
       </div>
     </div>
-    <select class="status-sel ${STATUS_CLASS[t.status]||''}" onchange="onStatusChange(this,'${t.id}')">
-      ${opts}
-    </select>
+    <div style="display:flex;align-items:center;gap:6px">
+      <select class="status-sel ${STATUS_CLASS[t.status]||''}" onchange="onStatusChange(this,'${t.id}')">
+        ${opts}
+      </select>
+      <button title="Edit task" style="background:none;border:none;font-size:15px;cursor:pointer;padding:2px 4px" onclick="openTaskDetail('${t.id}')">✏️</button>
+      <button title="Delete task" style="background:none;border:none;font-size:15px;cursor:pointer;padding:2px 4px" onclick="deleteTaskInstance('${t.id}')">🗑</button>
+    </div>
   </div>`;
 }
 
@@ -1898,10 +1945,10 @@ function renderMyTasks() {
 }
 
 function populateMTProjFilter() {
-  const cfg = AM_CONFIG[currentAmId];
+  const projs = myProjects.length ? myProjects : AM_CONFIG[currentAmId].projects;
   const el  = document.getElementById('mt-proj-filters');
   if (!el) return;
-  el.innerHTML = cfg.projects.map(p=>
+  el.innerHTML = projs.map(p=>
     `<span class="filter-chip mt-proj-chip" data-proj="${p}" onclick="toggleProjFilter(this)">${p}</span>`
   ).join('');
 }
@@ -1909,12 +1956,12 @@ function toggleProjFilter(el) { el.classList.toggle('active'); renderMyTasks(); 
 
 // ── By Project View ──
 function renderProjects() {
-  const cfg  = AM_CONFIG[currentAmId];
+  const projs = myProjects.length ? myProjects : AM_CONFIG[currentAmId].projects;
   const tabs = document.getElementById('am-proj-tabs');
   const cont = document.getElementById('am-proj-content');
-  const activeProjTab = document.querySelector('.proj-tab.active')?.dataset.proj || cfg.projects[0];
+  const activeProjTab = document.querySelector('.proj-tab.active')?.dataset.proj || projs[0];
 
-  tabs.innerHTML = cfg.projects.map(p=>
+  tabs.innerHTML = projs.map(p=>
     `<span class="proj-tab${p===activeProjTab?' active':''}" data-proj="${p}" onclick="selectProjTab(this,'${p}')">${p}</span>`
   ).join('');
 
@@ -1957,10 +2004,10 @@ function renderProjContent(proj, cont) {
 
 // ── Kanban View ──
 function populateKBFilter() {
-  const cfg = AM_CONFIG[currentAmId];
+  const projs = myProjects.length ? myProjects : AM_CONFIG[currentAmId].projects;
   const sel = document.getElementById('kb-proj-filter');
   if (!sel) return;
-  cfg.projects.forEach(p => { const o=document.createElement('option'); o.value=p; o.textContent=p; sel.appendChild(o); });
+  projs.forEach(p => { const o=document.createElement('option'); o.value=p; o.textContent=p; sel.appendChild(o); });
 }
 
 function renderKanban() {
@@ -2254,27 +2301,40 @@ function renderTaskLibraryTable() {
   const cnt=document.getElementById('tlib-count');
   if (cnt) cnt.textContent='('+taskLibrary.length+')';
   if (!taskLibrary.length) {
-    tbody.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px">No tasks in library yet. Add one using the form.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">No tasks in library yet. Add one using the form.</td></tr>';
     return;
   }
   const prioHtml = p => p==='high'?'<span style="color:var(--red);font-weight:700;font-size:11px">🔴 High</span>':p==='medium'?'<span style="color:var(--yellow);font-weight:700;font-size:11px">🟡 Medium</span>':'<span style="color:var(--green);font-weight:700;font-size:11px">🟢 Low</span>';
-  tbody.innerHTML = taskLibrary.map(t =>
-    '<tr><td><strong>'+t.name+'</strong>'+(t.detail?'<div style="font-size:10px;color:var(--muted);margin-top:2px">'+t.detail.substring(0,60)+'...</div>':'')+'</td>'+
-    '<td><span class="badge '+(CAT_CLASS[t.category]||'')+'">'+t.category+'</span></td>'+
-    '<td>'+prioHtml(t.priority)+'</td>'+
-    `<td style="white-space:nowrap"><button class="btn btn-sm btn-warning" onclick="openEditTaskLib('${t.id}')" style="margin-right:4px">✏️</button><button class="btn btn-sm btn-danger" onclick="deleteTaskLib('${t.id}')">🗑</button></td></tr>`
-  ).join('');
+  const freqLabel = f => f?('<span class="freq-pill fp-'+f.split('-')[0]+'">'+f.replace('daily-','').replace('everyday','every day')+'</span>'):'—';
+  tbody.innerHTML = taskLibrary.map(t => {
+    const dayDue = t.day||t.due||'—';
+    return '<tr>' +
+      '<td><strong>'+t.name+'</strong>'+(t.detail?'<div style="font-size:10px;color:var(--muted);margin-top:2px">'+t.detail.substring(0,60)+'...</div>':'')+'</td>'+
+      '<td><span class="badge '+(CAT_CLASS[t.category]||'')+'">'+t.category+'</span></td>'+
+      '<td>'+prioHtml(t.priority)+'</td>'+
+      '<td>'+freqLabel(t.frequency)+'</td>'+
+      '<td style="font-size:11px">'+dayDue+'</td>'+
+      `<td style="white-space:nowrap"><button class="btn btn-sm btn-warning" onclick="openEditTaskLib('${t.id}')" style="margin-right:4px">✏️</button><button class="btn btn-sm btn-danger" onclick="deleteTaskLib('${t.id}')">🗑</button></td></tr>`;
+  }).join('');
 }
 
 async function submitTaskLibrary(e) {
   e.preventDefault();
   const btn=document.getElementById('tlib-submit-btn');
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Saving...';
+  const tlFreq = document.getElementById('tlib-freq')?.value||'';
+  const tlBaseFreq = tlFreq.startsWith('daily')?'daily':tlFreq;
+  const tlDay = tlFreq.startsWith('daily-')
+    ? tlFreq.split('daily-')[1].charAt(0).toUpperCase()+tlFreq.split('daily-')[1].slice(1)
+    : (tlFreq==='weekly'||tlFreq==='biweekly') ? document.getElementById('tlib-day')?.value||'' : '';
   const task={
     name:      document.getElementById('tlib-name').value.trim(),
     detail:    document.getElementById('tlib-detail').value.trim(),
     category:  document.getElementById('tlib-cat').value,
     priority:  document.getElementById('tlib-prio').value,
+    frequency: tlBaseFreq||'',
+    day:       tlDay,
+    due:       (tlFreq==='monthly')? (document.getElementById('tlib-due')?.value.trim()||'') : '',
     active:    true,
     createdBy: currentUser.uid,
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -2285,7 +2345,7 @@ async function submitTaskLibrary(e) {
     taskLibrary.push(task);
     taskLibrary.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
     renderTaskLibraryTable();
-    document.getElementById('tasklibrary-form').reset();
+    resetTlibForm();
     populateMapTaskDropdown();
     toast('✅ "'+task.name+'" added to library!','success');
   } catch(err) { toast('Error: '+err.message,'error'); }
@@ -2489,8 +2549,21 @@ async function saveEditProject(id) {
 function openEditTaskLib(id) {
   const t = taskLibrary.find(x=>x.id===id);
   if (!t) return;
-  document.getElementById('modal-task-name').textContent = '✏️ Edit Task';
+  document.getElementById('modal-task-name').textContent = '✏️ Edit Task Library';
   const cats = ['Technical','On-Page','Off-Page','Analytics','Client','Research','AI-SEO','Reporting'];
+  const freqOpts = [
+    {v:'',l:'— none —'},{v:'daily-everyday',l:'Daily – Every Day'},{v:'daily-monday',l:'Daily – Monday'},
+    {v:'daily-tuesday',l:'Daily – Tuesday'},{v:'daily-wednesday',l:'Daily – Wednesday'},
+    {v:'daily-thursday',l:'Daily – Thursday'},{v:'daily-friday',l:'Daily – Friday'},
+    {v:'weekly',l:'Weekly'},{v:'biweekly',l:'Biweekly'},{v:'monthly',l:'Monthly'},
+  ];
+  let curFreq = '';
+  if (t.frequency==='daily') {
+    const d=(t.day||'').toLowerCase();
+    curFreq = (d==='every day'||d==='')?'daily-everyday':'daily-'+d;
+  } else { curFreq = t.frequency||''; }
+  const showDay = (t.frequency==='weekly'||t.frequency==='biweekly');
+  const showDue = (t.frequency==='monthly');
   document.getElementById('modal-body').innerHTML = `
     <div class="form-row">
       <label class="form-label">Task Name</label>
@@ -2516,6 +2589,24 @@ function openEditTaskLib(id) {
         </select>
       </div>
     </div>
+    <div class="form-row-2">
+      <div class="form-row">
+        <label class="form-label">Default Frequency</label>
+        <select class="form-select" id="et-freq" onchange="onEtFreqChange()">
+          ${freqOpts.map(f=>`<option value="${f.v}"${curFreq===f.v?' selected':''}>${f.l}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-row" id="et-day-row" style="display:${showDay?'block':'none'}">
+        <label class="form-label">Day of Week</label>
+        <select class="form-select" id="et-day">
+          ${['Monday','Tuesday','Wednesday','Thursday','Friday'].map(d=>`<option${t.day===d?' selected':''}>${d}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-row" id="et-due-row" style="display:${showDue?'block':'none'}">
+        <label class="form-label">Due / Timing</label>
+        <input class="form-input" id="et-due" value="${(t.due||'').replace(/"/g,'&quot;')}" placeholder="e.g. By 26th, 1st Monday">
+      </div>
+    </div>
     <div style="display:flex;gap:10px;margin-top:16px">
       <button class="btn btn-primary" onclick="saveEditTaskLib('${id}')">💾 Save Changes</button>
       <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
@@ -2523,16 +2614,28 @@ function openEditTaskLib(id) {
   document.getElementById('modal-overlay').classList.add('open');
 }
 
+function onEtFreqChange() {
+  const freq = document.getElementById('et-freq').value;
+  document.getElementById('et-day-row').style.display = (freq==='weekly'||freq==='biweekly')?'block':'none';
+  document.getElementById('et-due-row').style.display = freq==='monthly'?'block':'none';
+}
+
 async function saveEditTaskLib(id) {
   const name     = document.getElementById('et-name').value.trim();
   const detail   = document.getElementById('et-detail').value.trim();
   const category = document.getElementById('et-cat').value;
   const priority = document.getElementById('et-prio').value;
+  const etFreq   = document.getElementById('et-freq')?.value||'';
+  const baseFreq = etFreq.startsWith('daily')?'daily':etFreq;
+  const day = etFreq.startsWith('daily-')
+    ? etFreq.split('daily-')[1].charAt(0).toUpperCase()+etFreq.split('daily-')[1].slice(1)
+    : (etFreq==='weekly'||etFreq==='biweekly') ? document.getElementById('et-day')?.value||'' : '';
+  const due = etFreq==='monthly' ? (document.getElementById('et-due')?.value.trim()||'') : '';
   if (!name){ toast('Task name is required','error'); return; }
   try {
-    await db.collection('taskLibrary').doc(id).update({name,detail,category,priority});
+    await db.collection('taskLibrary').doc(id).update({name,detail,category,priority,frequency:baseFreq,day,due});
     const idx = taskLibrary.findIndex(t=>t.id===id);
-    if (idx!==-1) Object.assign(taskLibrary[idx],{name,detail,category,priority});
+    if (idx!==-1) Object.assign(taskLibrary[idx],{name,detail,category,priority,frequency:baseFreq,day,due});
     taskLibrary.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
     renderTaskLibraryTable();
     populateMapTaskDropdown();
@@ -2654,6 +2757,50 @@ async function saveEditTemplate(id) {
     closeModal();
     toast('✅ Task updated! Changes apply next cycle.','success');
   } catch(err){ toast('Error: '+err.message,'error'); }
+}
+
+// ================================================================
+// TASK LIBRARY FORM HELPERS
+// ================================================================
+function onTlibFreqChange() {
+  const freq = document.getElementById('tlib-freq').value;
+  document.getElementById('tlib-day-row').style.display = (freq==='weekly'||freq==='biweekly')?'block':'none';
+  document.getElementById('tlib-due-row').style.display = freq==='monthly'?'block':'none';
+}
+function resetTlibForm() {
+  document.getElementById('tasklibrary-form').reset();
+  document.getElementById('tlib-day-row').style.display='none';
+  document.getElementById('tlib-due-row').style.display='none';
+}
+
+// ================================================================
+// TASK INSTANCE DELETE (AM)
+// ================================================================
+async function deleteTaskInstance(id) {
+  if (!confirm('Remove this task from your list?')) return;
+  try {
+    await db.collection('taskInstances').doc(id).delete();
+    myInstances = myInstances.filter(t=>t.id!==id);
+    renderAMToday();
+    const activeTab = document.querySelector('.am-tab.active')?.textContent.trim();
+    if (activeTab?.includes('My Tasks'))  renderMyTasks();
+    if (activeTab?.includes('Project'))   renderProjects();
+    if (activeTab?.includes('Kanban'))    renderKanban();
+    toast('Task removed','success');
+  } catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+// ================================================================
+// AVP BOARD TASK DELETE
+// ================================================================
+async function avpDeleteInstance(amId, instanceId) {
+  if (!confirm('Remove this task instance?')) return;
+  try {
+    await db.collection('taskInstances').doc(instanceId).delete();
+    if (allInstances[amId]) allInstances[amId]=allInstances[amId].filter(t=>t.id!==instanceId);
+    renderAMBoardAVP(amId);
+    toast('Task removed','success');
+  } catch(e){ toast('Error: '+e.message,'error'); }
 }
 
 // ================================================================
