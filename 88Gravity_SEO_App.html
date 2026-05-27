@@ -269,6 +269,14 @@ tr:hover td{background:var(--pale-blue)}
 .metric-label{font-size:11px;color:var(--muted);font-weight:600}
 
 
+
+/* ── TWO-COL FORM LAYOUT ────────────────── */
+.two-col-form-grid{display:grid;grid-template-columns:400px 1fr;gap:18px;align-items:start}
+@media(max-width:960px){.two-col-form-grid{grid-template-columns:1fr}}
+.svc-tag-SEO{background:#D5F5E3;color:#1e8449}
+.svc-tag-GMB{background:#D6EAF8;color:#1a5276}
+.svc-tag-AI{background:#EBD5F5;color:#6c3483}
+
 /* ── MULTI-SELECT DROPDOWN ──────────────── */
 .multisel-wrap{position:relative;width:100%}
 .multisel-trigger{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border:2px solid #E9ECF0;border-radius:8px;font-size:13px;cursor:pointer;background:#fff;transition:border .2s;user-select:none}
@@ -343,6 +351,9 @@ tr:hover td{background:var(--pale-blue)}
         <div class="sidebar-nav">
           <div class="nav-item active" onclick="avpNav('overview',this)"><span class="nav-icon">📊</span>Overview</div>
           <div class="nav-item" onclick="avpNav('allocate',this)"><span class="nav-icon">➕</span>Allocate Task</div>
+          <div class="nav-item" onclick="avpNav('projects',this)"><span class="nav-icon">🏢</span>Projects</div>
+          <div class="nav-item" onclick="avpNav('tasklibrary',this)"><span class="nav-icon">📚</span>Task Library</div>
+          <div class="nav-item" onclick="avpNav('maptasks',this)"><span class="nav-icon">🔗</span>Map Tasks</div>
           <div class="nav-item" onclick="avpNav('tasks',this)"><span class="nav-icon">📋</span>All Tasks</div>
           <div class="nav-item" onclick="avpNav('birbal',this)"><span class="nav-icon">👤</span>Birbal's Board</div>
           <div class="nav-item" onclick="avpNav('ajay',this)"><span class="nav-icon">👤</span>Ajay's Board</div>
@@ -481,6 +492,193 @@ tr:hover td{background:var(--pale-blue)}
             </form>
           </div>
         </div>
+
+        <!-- ===== PROJECTS VIEW ===== -->
+        <div id="avp-projects" class="avp-view" style="display:none">
+          <div class="page-header"><h1>🏢 Projects</h1><p>Onboard new client projects and manage your full portfolio.</p></div>
+          <div class="two-col-form-grid">
+            <!-- FORM -->
+            <div class="card">
+              <div class="card-title">➕ Onboard New Project</div>
+              <form id="project-form" onsubmit="submitProject(event)">
+                <div class="form-row">
+                  <label class="form-label">Project Name *</label>
+                  <input class="form-input" id="proj-name" placeholder="e.g. ABC Corp" required>
+                </div>
+                <div class="form-row">
+                  <label class="form-label">Project Website URL</label>
+                  <input class="form-input" id="proj-url" placeholder="https://example.com" type="url">
+                </div>
+                <div class="form-row">
+                  <label class="form-label">Assigned AM *</label>
+                  <select class="form-select" id="proj-am" required>
+                    <option value="">Select Account Manager</option>
+                    <option value="birbal">Birbal Sharma</option>
+                    <option value="ajay">Ajay Kumar</option>
+                    <option value="ambuj">Ambuj Surothiya</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label class="form-label">Project Service Type *</label>
+                  <div class="multisel-wrap" id="proj-service-wrap">
+                    <div class="multisel-trigger" id="proj-service-trigger" onclick="toggleProjServiceDropdown()">
+                      <span id="proj-service-label" style="color:var(--muted)">Select service types...</span>
+                      <span class="multisel-arrow">&#9662;</span>
+                    </div>
+                    <div class="multisel-dropdown" id="proj-service-dropdown" style="display:none">
+                      <label class="multisel-item"><input type="checkbox" value="SEO" onchange="updateProjServiceLabel()"> SEO</label>
+                      <label class="multisel-item"><input type="checkbox" value="GMB" onchange="updateProjServiceLabel()"> GMB</label>
+                      <label class="multisel-item"><input type="checkbox" value="AI-SEO &amp; Citation" onchange="updateProjServiceLabel()"> AI-SEO &amp; Citation</label>
+                    </div>
+                  </div>
+                  <div class="multisel-tags" id="proj-service-tags"></div>
+                </div>
+                <div style="display:flex;gap:10px;margin-top:8px">
+                  <button type="submit" class="btn btn-primary" id="proj-submit-btn">Onboard Project</button>
+                  <button type="button" class="btn btn-outline" onclick="resetProjectForm()">Clear</button>
+                </div>
+              </form>
+            </div>
+            <!-- TABLE -->
+            <div class="card">
+              <div class="card-title">📁 All Projects <span id="proj-count" style="font-size:11px;font-weight:400;color:var(--muted)"></span></div>
+              <div class="table-wrap">
+                <table><thead><tr><th>Project Name</th><th>Website</th><th>AM</th><th>Service Types</th><th></th></tr></thead>
+                <tbody id="projects-table-body"><tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">No projects yet.</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== TASK LIBRARY VIEW ===== -->
+        <div id="avp-tasklibrary" class="avp-view" style="display:none">
+          <div class="page-header"><h1>📚 Task Library</h1><p>Build your reusable task repository — then map tasks to projects in the next step.</p></div>
+          <div class="two-col-form-grid">
+            <!-- FORM -->
+            <div class="card">
+              <div class="card-title">➕ Add Task to Library</div>
+              <form id="tasklibrary-form" onsubmit="submitTaskLibrary(event)">
+                <div class="form-row">
+                  <label class="form-label">Task Name *</label>
+                  <input class="form-input" id="tlib-name" placeholder="e.g. Weekly Competitor Snapshot" required>
+                </div>
+                <div class="form-row">
+                  <label class="form-label">Task Details / Instructions</label>
+                  <textarea class="form-textarea" id="tlib-detail" placeholder="What should the AM do for this task?"></textarea>
+                </div>
+                <div class="form-row-2">
+                  <div class="form-row">
+                    <label class="form-label">Category *</label>
+                    <select class="form-select" id="tlib-cat" required>
+                      <option value="">Select category</option>
+                      <option>Technical</option><option>On-Page</option><option>Off-Page</option>
+                      <option>Analytics</option><option>Client</option><option>Research</option>
+                      <option>AI-SEO</option><option>Reporting</option>
+                    </select>
+                  </div>
+                  <div class="form-row">
+                    <label class="form-label">Priority</label>
+                    <select class="form-select" id="tlib-prio">
+                      <option value="high">🔴 High</option>
+                      <option value="medium" selected>🟡 Medium</option>
+                      <option value="low">🟢 Low</option>
+                    </select>
+                  </div>
+                </div>
+                <div style="display:flex;gap:10px;margin-top:8px">
+                  <button type="submit" class="btn btn-primary" id="tlib-submit-btn">Add to Library</button>
+                  <button type="button" class="btn btn-outline" onclick="document.getElementById('tasklibrary-form').reset()">Clear</button>
+                </div>
+              </form>
+            </div>
+            <!-- TABLE -->
+            <div class="card">
+              <div class="card-title">📋 Task Library <span id="tlib-count" style="font-size:11px;font-weight:400;color:var(--muted)"></span></div>
+              <div class="table-wrap">
+                <table><thead><tr><th>Task Name</th><th>Category</th><th>Priority</th><th></th></tr></thead>
+                <tbody id="tasklibrary-table-body"><tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">No tasks in library yet.</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== MAP TASKS VIEW ===== -->
+        <div id="avp-maptasks" class="avp-view" style="display:none">
+          <div class="page-header"><h1>🔗 Map Tasks to Projects</h1><p>Pick a task from your library, set its schedule, and assign it to one or more projects.</p></div>
+          <div class="card" style="max-width:700px">
+            <form id="maptask-form" onsubmit="submitMapTask(event)">
+              <div class="form-row">
+                <label class="form-label">Select Task from Library *</label>
+                <select class="form-select" id="map-task-sel" required>
+                  <option value="">Choose a task...</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label class="form-label">Additional Instructions (optional)</label>
+                <textarea class="form-textarea" id="map-detail" placeholder="Any project-specific notes for this assignment..."></textarea>
+              </div>
+              <div class="form-row-2">
+                <div class="form-row">
+                  <label class="form-label">Frequency *</label>
+                  <select class="form-select" id="map-freq" onchange="onMapFreqChange()" required>
+                    <option value="">Select frequency</option>
+                    <option value="daily-everyday">Daily – Every Day</option>
+                    <option value="daily-monday">Daily – Monday only</option>
+                    <option value="daily-tuesday">Daily – Tuesday only</option>
+                    <option value="daily-wednesday">Daily – Wednesday only</option>
+                    <option value="daily-thursday">Daily – Thursday only</option>
+                    <option value="daily-friday">Daily – Friday only</option>
+                    <option value="weekly">Weekly (pick day below)</option>
+                    <option value="biweekly">Biweekly (pick day below)</option>
+                    <option value="monthly">Monthly (specify timing below)</option>
+                  </select>
+                </div>
+                <div class="form-row" id="map-day-row" style="display:none">
+                  <label class="form-label">Day of Week</label>
+                  <select class="form-select" id="map-day">
+                    <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
+                    <option>Thursday</option><option>Friday</option>
+                  </select>
+                </div>
+                <div class="form-row" id="map-due-row" style="display:none">
+                  <label class="form-label">Due / Timing</label>
+                  <input class="form-input" id="map-due" placeholder="e.g. By 26th, 1st Monday">
+                </div>
+              </div>
+              <div class="form-row">
+                <label class="form-label">Filter by AM (optional)</label>
+                <select class="form-select" id="map-am-filter" onchange="populateMapProjectList()" style="max-width:260px">
+                  <option value="">All AMs</option>
+                  <option value="birbal">Birbal Sharma</option>
+                  <option value="ajay">Ajay Kumar</option>
+                  <option value="ambuj">Ambuj Surothiya</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label class="form-label">Select Projects to Assign *</label>
+                <div id="map-projects-container" style="margin-top:6px">
+                  <div style="font-size:12px;color:var(--muted);padding:10px;background:var(--pale-blue);border-radius:8px">
+                    ℹ️ Onboard projects first in the <strong>Projects</strong> section.
+                  </div>
+                </div>
+              </div>
+              <div class="form-row">
+                <label class="form-label">Start From</label>
+                <select class="form-select" id="map-start" style="max-width:280px">
+                  <option value="now">Immediately (current cycle)</option>
+                  <option value="next">Next cycle (next week/month)</option>
+                </select>
+              </div>
+              <div style="display:flex;gap:10px;margin-top:8px">
+                <button type="submit" class="btn btn-primary" id="map-submit-btn">🔗 Map Task</button>
+                <button type="button" class="btn btn-outline" onclick="resetMapForm()">Clear</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
 
         <div id="avp-tasks" class="avp-view" style="display:none">
           <div class="page-header"><h1>📋 All Tasks</h1><p>View and manage all task templates assigned to your team.</p></div>
@@ -704,6 +902,8 @@ let currentRole = null;
 let currentAmId = null;
 let myInstances = [];      // AM: live task instances
 let allTemplates = [];     // Cache of task templates
+let allProjects  = [];      // Firestore projects
+let taskLibrary  = [];      // Simple task library
 let allInstances = {};     // AVP: { amId: [instances] }
 let unsubListeners = [];   // Firestore unsubscribe fns
 
@@ -891,6 +1091,8 @@ async function initAVP() {
   document.getElementById('today-day-label').textContent = `(${dayName()})`;
 
   await loadTemplates();
+  await loadProjects();
+  await loadTaskLibrary();
 
   // Auto-generate task instances for all AMs (so AVP boards show data immediately)
   for (const amId of ['birbal', 'ajay', 'ambuj']) {
@@ -911,7 +1113,10 @@ function avpNav(view, el) {
   if (view === 'birbal')   renderAMBoardAVP('birbal');
   if (view === 'ajay')     renderAMBoardAVP('ajay');
   if (view === 'ambuj')    renderAMBoardAVP('ambuj');
-  if (view === 'reports')  renderReports();
+  if (view === 'reports')     renderReports();
+  if (view === 'projects')    renderProjectsList();
+  if (view === 'tasklibrary') renderTaskLibraryTable();
+  if (view === 'maptasks')    renderMapTasksView();
 }
 
 async function loadTemplates() {
@@ -1924,6 +2129,303 @@ async function seedDefaultTasks() {
 }
 
 // ================================================================
+// PROJECTS MODULE
+// ================================================================
+async function loadProjects() {
+  try {
+    const snap = await db.collection('projects').where('active','==',true).get();
+    allProjects = snap.docs.map(d=>({id:d.id,...d.data()}));
+    allProjects.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  } catch(e) { console.warn('loadProjects:', e); allProjects = []; }
+}
+
+function svcTagHtml(types) {
+  if (!types || !types.length) return '—';
+  return types.map(s => {
+    const cls = s==='SEO'?'svc-tag-SEO':s==='GMB'?'svc-tag-GMB':'svc-tag-AI';
+    return '<span class="badge ' + cls + '" style="margin:1px">' + s + '</span>';
+  }).join('');
+}
+
+function renderProjectsList() {
+  const tbody = document.getElementById('projects-table-body');
+  if (!tbody) return;
+  const cnt = document.getElementById('proj-count');
+  if (cnt) cnt.textContent = '(' + allProjects.length + ')';
+  if (!allProjects.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px">No projects yet. Use the form to onboard your first project.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = allProjects.map(p => {
+    const amName = (p.amId && AM_CONFIG[p.amId]) ? AM_CONFIG[p.amId].name : (p.amId||'—');
+    const urlDisplay = p.url ? '<a href="' + p.url + '" target="_blank" style="color:var(--mid-blue);font-size:11px;word-break:break-all">' + p.url + '</a>' : '—';
+    return '<tr><td><strong>' + (p.name||'—') + '</strong></td><td>' + urlDisplay + '</td>' +
+      '<td><strong style="font-size:12px">' + amName + '</strong></td>' +
+      '<td>' + svcTagHtml(p.serviceTypes) + '</td>' +
+      '<td><button class="btn btn-sm btn-danger" onclick="deleteProject('' + p.id + '')">🗑</button></td></tr>';
+  }).join('');
+}
+
+async function submitProject(e) {
+  e.preventDefault();
+  const btn = document.getElementById('proj-submit-btn');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Saving...';
+  const serviceTypes = [...document.querySelectorAll('#proj-service-dropdown input:checked')].map(c=>c.value);
+  if (!serviceTypes.length) {
+    toast('Select at least one service type','error');
+    btn.disabled=false; btn.innerHTML='Onboard Project'; return;
+  }
+  const project = {
+    name:         document.getElementById('proj-name').value.trim(),
+    url:          document.getElementById('proj-url').value.trim(),
+    amId:         document.getElementById('proj-am').value,
+    serviceTypes,
+    active:       true,
+    createdBy:    currentUser.uid,
+    createdAt:    firebase.firestore.FieldValue.serverTimestamp(),
+  };
+  try {
+    const ref = await db.collection('projects').add(project);
+    project.id = ref.id;
+    allProjects.push(project);
+    allProjects.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    renderProjectsList();
+    resetProjectForm();
+    toast('✅ Project "' + project.name + '" onboarded!','success');
+    // refresh map-tasks project list if open
+    populateMapProjectList();
+  } catch(err) { toast('Error: '+err.message,'error'); }
+  btn.disabled=false; btn.innerHTML='Onboard Project';
+}
+
+function resetProjectForm() {
+  document.getElementById('project-form').reset();
+  document.querySelectorAll('#proj-service-dropdown input').forEach(cb=>cb.checked=false);
+  updateProjServiceLabel();
+  document.getElementById('proj-service-dropdown').style.display='none';
+  document.getElementById('proj-service-trigger').classList.remove('open');
+}
+
+async function deleteProject(id) {
+  if (!confirm('Remove this project? Existing task assignments are not affected.')) return;
+  await db.collection('projects').doc(id).update({active:false});
+  allProjects = allProjects.filter(p=>p.id!==id);
+  renderProjectsList();
+  populateMapProjectList();
+  toast('Project removed','success');
+}
+
+function toggleProjServiceDropdown() {
+  const dd=document.getElementById('proj-service-dropdown');
+  const tr=document.getElementById('proj-service-trigger');
+  const open=dd.style.display!=='none';
+  dd.style.display=open?'none':'block';
+  tr.classList.toggle('open',!open);
+}
+
+function updateProjServiceLabel() {
+  const checked=[...document.querySelectorAll('#proj-service-dropdown input:checked')].map(c=>c.value);
+  const lbl=document.getElementById('proj-service-label');
+  const tags=document.getElementById('proj-service-tags');
+  if (checked.length) {
+    lbl.textContent=checked.join(', '); lbl.style.color='var(--text)';
+    tags.innerHTML=checked.map(v=>'<span class="multisel-tag">'+v+'</span>').join('');
+  } else {
+    lbl.textContent='Select service types...'; lbl.style.color='var(--muted)'; tags.innerHTML='';
+  }
+}
+
+// ================================================================
+// TASK LIBRARY MODULE
+// ================================================================
+async function loadTaskLibrary() {
+  try {
+    const snap = await db.collection('taskLibrary').where('active','==',true).get();
+    taskLibrary = snap.docs.map(d=>({id:d.id,...d.data()}));
+    taskLibrary.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  } catch(e) { console.warn('loadTaskLibrary:', e); taskLibrary=[]; }
+}
+
+function renderTaskLibraryTable() {
+  const tbody=document.getElementById('tasklibrary-table-body');
+  if (!tbody) return;
+  const cnt=document.getElementById('tlib-count');
+  if (cnt) cnt.textContent='('+taskLibrary.length+')';
+  if (!taskLibrary.length) {
+    tbody.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px">No tasks in library yet. Add one using the form.</td></tr>';
+    return;
+  }
+  const prioHtml = p => p==='high'?'<span style="color:var(--red);font-weight:700;font-size:11px">🔴 High</span>':p==='medium'?'<span style="color:var(--yellow);font-weight:700;font-size:11px">🟡 Medium</span>':'<span style="color:var(--green);font-weight:700;font-size:11px">🟢 Low</span>';
+  tbody.innerHTML = taskLibrary.map(t =>
+    '<tr><td><strong>'+t.name+'</strong>'+(t.detail?'<div style="font-size:10px;color:var(--muted);margin-top:2px">'+t.detail.substring(0,60)+'...</div>':'')+'</td>'+
+    '<td><span class="badge '+(CAT_CLASS[t.category]||'')+'">'+t.category+'</span></td>'+
+    '<td>'+prioHtml(t.priority)+'</td>'+
+    '<td><button class="btn btn-sm btn-danger" onclick="deleteTaskLib(''+t.id+'')">🗑</button></td></tr>'
+  ).join('');
+}
+
+async function submitTaskLibrary(e) {
+  e.preventDefault();
+  const btn=document.getElementById('tlib-submit-btn');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Saving...';
+  const task={
+    name:      document.getElementById('tlib-name').value.trim(),
+    detail:    document.getElementById('tlib-detail').value.trim(),
+    category:  document.getElementById('tlib-cat').value,
+    priority:  document.getElementById('tlib-prio').value,
+    active:    true,
+    createdBy: currentUser.uid,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+  try {
+    const ref = await db.collection('taskLibrary').add(task);
+    task.id=ref.id;
+    taskLibrary.push(task);
+    taskLibrary.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    renderTaskLibraryTable();
+    document.getElementById('tasklibrary-form').reset();
+    populateMapTaskDropdown();
+    toast('✅ "'+task.name+'" added to library!','success');
+  } catch(err) { toast('Error: '+err.message,'error'); }
+  btn.disabled=false; btn.innerHTML='Add to Library';
+}
+
+async function deleteTaskLib(id) {
+  if (!confirm('Remove this task from the library?')) return;
+  await db.collection('taskLibrary').doc(id).update({active:false});
+  taskLibrary=taskLibrary.filter(t=>t.id!==id);
+  renderTaskLibraryTable();
+  populateMapTaskDropdown();
+  toast('Task removed from library','success');
+}
+
+// ================================================================
+// MAP TASKS MODULE
+// ================================================================
+function renderMapTasksView() {
+  populateMapTaskDropdown();
+  populateMapProjectList();
+}
+
+function populateMapTaskDropdown() {
+  const sel=document.getElementById('map-task-sel');
+  if (!sel) return;
+  sel.innerHTML='<option value="">Choose a task...</option>'+
+    taskLibrary.map(t=>'<option value="'+t.id+'">['+t.category+'] '+t.name+'</option>').join('');
+}
+
+function populateMapProjectList() {
+  const container=document.getElementById('map-projects-container');
+  if (!container) return;
+  const amFilt=document.getElementById('map-am-filter')?.value||'';
+  let projs=allProjects;
+  if (amFilt) projs=projs.filter(p=>p.amId===amFilt);
+  if (!projs.length) {
+    container.innerHTML='<div style="font-size:12px;color:var(--muted);padding:10px;background:var(--pale-blue);border-radius:8px">'+
+      (allProjects.length ? 'No projects found for selected AM.' : 'ℹ️ No projects yet — onboard projects in the <strong>Projects</strong> section first.')+'</div>';
+    return;
+  }
+  container.innerHTML =
+    '<div style="margin-bottom:8px"><label class="cb-item" style="display:inline-flex;width:auto">'+
+    '<input type="checkbox" id="map-all-projs" onchange="selectAllMapProjects()"> ✅ Select All Visible</label></div>'+
+    '<div class="checkbox-group" id="map-proj-checks">'+
+    projs.map(p=>{
+      const amN=(p.amId&&AM_CONFIG[p.amId])?AM_CONFIG[p.amId].name.split(' ')[0]:p.amId||'';
+      return '<label class="cb-item"><input type="checkbox" class="map-proj-cb" value="'+p.id+'" data-name="'+p.name+'" data-am="'+p.amId+'"> '+
+        p.name+' <span style="font-size:10px;color:var(--muted);margin-left:4px">'+amN+'</span></label>';
+    }).join('')+'</div>';
+}
+
+function selectAllMapProjects() {
+  const c=document.getElementById('map-all-projs').checked;
+  document.querySelectorAll('.map-proj-cb').forEach(cb=>cb.checked=c);
+}
+
+function onMapFreqChange() {
+  const freq=document.getElementById('map-freq').value;
+  document.getElementById('map-day-row').style.display=(freq==='weekly'||freq==='biweekly')?'block':'none';
+  document.getElementById('map-due-row').style.display=freq==='monthly'?'block':'none';
+}
+
+function resetMapForm() {
+  document.getElementById('maptask-form').reset();
+  document.getElementById('map-day-row').style.display='none';
+  document.getElementById('map-due-row').style.display='none';
+  populateMapProjectList();
+}
+
+async function submitMapTask(e) {
+  e.preventDefault();
+  const btn=document.getElementById('map-submit-btn');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Mapping...';
+
+  const taskId=document.getElementById('map-task-sel').value;
+  const task=taskLibrary.find(t=>t.id===taskId);
+  if (!task) { toast('Select a task first','error'); btn.disabled=false; btn.innerHTML='🔗 Map Task'; return; }
+
+  const selCbs=[...document.querySelectorAll('.map-proj-cb:checked')];
+  if (!selCbs.length) { toast('Select at least one project','error'); btn.disabled=false; btn.innerHTML='🔗 Map Task'; return; }
+
+  const freq=document.getElementById('map-freq').value;
+  const baseFreq=freq.startsWith('daily')?'daily':freq;
+  const day=freq.startsWith('daily-')
+    ? freq.split('daily-')[1].charAt(0).toUpperCase()+freq.split('daily-')[1].slice(1)
+    : (freq==='weekly'||freq==='biweekly') ? document.getElementById('map-day').value : 'Every Day';
+
+  // Group by AM
+  const assignedToAMs=new Set();
+  const assignedToProjects={};
+  selCbs.forEach(cb => {
+    const proj=allProjects.find(p=>p.id===cb.value);
+    if (!proj) return;
+    assignedToAMs.add(proj.amId);
+    if (!assignedToProjects[proj.amId]) assignedToProjects[proj.amId]=[];
+    assignedToProjects[proj.amId].push(proj.name);
+  });
+
+  const template={
+    name:              task.name,
+    detail:            document.getElementById('map-detail').value.trim() || task.detail||'',
+    category:          task.category,
+    priority:          task.priority,
+    taskLibraryId:     taskId,
+    frequency:         baseFreq,
+    day,
+    due:               document.getElementById('map-due')?.value.trim()||'',
+    assignedToAMs:     [...assignedToAMs],
+    assignedToProjects,
+    active:            true,
+    createdBy:         currentUser.uid,
+    createdAt:         firebase.firestore.FieldValue.serverTimestamp(),
+  };
+
+  try {
+    const docRef=await db.collection('taskTemplates').add(template);
+    template.id=docRef.id;
+    allTemplates.push(template);
+
+    if (document.getElementById('map-start').value==='now') {
+      for (const amId of [...assignedToAMs]) {
+        const projects=assignedToProjects[amId];
+        const batch=db.batch(); const initRef=db.collection('periodInit');
+        const dayK=todayStr(), wk=weekKey(), bwk=biWeekKey(), moK=monthKey();
+        if (baseFreq==='daily')    batch.delete(initRef.doc(amId+'-'+dayK));
+        if (baseFreq==='weekly')   batch.delete(initRef.doc(amId+'-'+wk));
+        if (baseFreq==='biweekly') batch.delete(initRef.doc(amId+'-'+bwk));
+        if (baseFreq==='monthly')  batch.delete(initRef.doc(amId+'-'+moK));
+        await batch.commit();
+        await ensureInstances(amId, projects, [template]);
+      }
+    }
+
+    const projNames=selCbs.map(cb=>cb.dataset.name).join(', ');
+    toast('✅ "'+task.name+'" mapped to: '+projNames,'success');
+    resetMapForm();
+  } catch(err) { toast('Error: '+err.message,'error'); }
+  btn.disabled=false; btn.innerHTML='🔗 Map Task';
+}
+
+// ================================================================
 // SERVICE TYPE MULTISELECT HELPERS
 // ================================================================
 function toggleServiceDropdown() {
@@ -1949,15 +2451,19 @@ function updateServiceLabel() {
   }
 }
 
-// Close dropdown on outside click
+// Close all multiselect dropdowns on outside click
 document.addEventListener('click', function(e) {
-  const wrap = document.getElementById('f-service-wrap');
-  if (wrap && !wrap.contains(e.target)) {
-    const dd = document.getElementById('f-service-dropdown');
-    const tr = document.getElementById('f-service-trigger');
-    if (dd) dd.style.display = 'none';
-    if (tr) tr.classList.remove('open');
-  }
+  [
+    ['f-service-wrap',    'f-service-dropdown',    'f-service-trigger'],
+    ['proj-service-wrap', 'proj-service-dropdown', 'proj-service-trigger'],
+  ].forEach(([wid, did, tid]) => {
+    const w = document.getElementById(wid);
+    if (w && !w.contains(e.target)) {
+      const d = document.getElementById(did), t = document.getElementById(tid);
+      if (d) d.style.display = 'none';
+      if (t) t.classList.remove('open');
+    }
+  });
 });
 
 // ================================================================
