@@ -798,6 +798,13 @@ async function initAVP() {
   document.getElementById('today-day-label').textContent = `(${dayName()})`;
 
   await loadTemplates();
+
+  // Auto-generate task instances for all AMs (so AVP boards show data immediately)
+  for (const amId of ['birbal', 'ajay', 'ambuj']) {
+    const cfg = AM_CONFIG[amId];
+    await ensureInstances(amId, cfg.projects, allTemplates);
+  }
+
   subscribeAVPInstances();
   checkDeadlineAlerts();
 }
