@@ -1,0 +1,1445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>88Gravity — SEO Team Dashboard</title>
+<!-- Firebase v8 compat SDK -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<style>
+:root {
+  --dark-blue:#1E3A5F; --mid-blue:#2E86AB; --light-blue:#BDD5EA; --pale-blue:#E8F4F8;
+  --orange:#E67E22; --light-orange:#FDEBD0;
+  --green:#27AE60; --light-green:#D5F5E3;
+  --yellow:#D4AC0D; --light-yellow:#FEF9E7;
+  --red:#E74C3C; --light-red:#FADBD8;
+  --purple:#8E44AD; --light-purple:#EBD5F5;
+  --teal:#148F77; --light-teal:#D1F2EB;
+  --bg:#F0F4F8; --card:#fff; --text:#1A1A2E; --muted:#6B7280;
+  --sidebar-w:220px;
+  --radius:10px;
+  --shadow:0 2px 10px rgba(0,0,0,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+button{cursor:pointer;font-family:inherit}
+input,select,textarea{font-family:inherit}
+
+/* ── LOGIN ─────────────────────────────── */
+#login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,var(--dark-blue) 0%,#2c5282 50%,var(--mid-blue) 100%)}
+.login-card{background:#fff;border-radius:18px;padding:44px 48px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.25);max-width:420px;width:90%}
+.login-logo{font-size:28px;font-weight:800;letter-spacing:1px;margin-bottom:6px}
+.login-logo span{color:var(--orange)}
+.login-sub{font-size:13px;color:var(--muted);margin-bottom:32px}
+.btn-google{display:flex;align-items:center;justify-content:center;gap:12px;background:#fff;border:2px solid #E9ECF0;border-radius:10px;padding:13px 24px;font-size:14px;font-weight:600;color:var(--text);transition:all .2s;width:100%}
+.btn-google:hover{border-color:var(--mid-blue);background:var(--pale-blue)}
+.btn-google img{width:22px}
+.login-note{font-size:11px;color:var(--muted);margin-top:20px;line-height:1.6}
+
+/* ── APP SHELL ──────────────────────────── */
+#app{display:none;min-height:100vh}
+
+/* ── AVP LAYOUT ─────────────────────────── */
+#avp-app{display:none;min-height:100vh}
+.avp-layout{display:flex;min-height:100vh}
+.sidebar{width:var(--sidebar-w);background:var(--dark-blue);color:#fff;display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:50;overflow-y:auto}
+.sidebar-brand{padding:20px 18px 16px;border-bottom:1px solid rgba(255,255,255,.1)}
+.sidebar-brand .brand{font-size:17px;font-weight:800}
+.sidebar-brand .brand span{color:var(--orange)}
+.sidebar-brand .role-tag{font-size:10px;background:var(--orange);padding:2px 8px;border-radius:10px;margin-top:5px;display:inline-block}
+.sidebar-user{padding:12px 18px;border-bottom:1px solid rgba(255,255,255,.1);font-size:12px;opacity:.75}
+.sidebar-user strong{display:block;opacity:1;font-size:13px}
+.sidebar-nav{padding:12px 0;flex:1}
+.nav-item{display:flex;align-items:center;gap:10px;padding:11px 18px;font-size:13px;color:rgba(255,255,255,.7);cursor:pointer;transition:all .15s;border-left:3px solid transparent}
+.nav-item:hover{background:rgba(255,255,255,.07);color:#fff}
+.nav-item.active{background:rgba(255,255,255,.12);color:#fff;border-left-color:var(--orange)}
+.nav-item .nav-icon{font-size:16px;width:20px;text-align:center}
+.sidebar-footer{padding:14px 18px;border-top:1px solid rgba(255,255,255,.1)}
+.btn-logout{background:rgba(255,255,255,.1);border:none;color:rgba(255,255,255,.8);padding:8px 14px;border-radius:8px;font-size:12px;width:100%;transition:background .2s}
+.btn-logout:hover{background:rgba(255,255,255,.2)}
+
+.avp-main{margin-left:var(--sidebar-w);flex:1;padding:24px;overflow-x:hidden}
+.page-header{margin-bottom:20px}
+.page-header h1{font-size:22px;font-weight:700;color:var(--dark-blue)}
+.page-header p{font-size:13px;color:var(--muted);margin-top:4px}
+
+/* ── AM LAYOUT ──────────────────────────── */
+#am-app{display:none;min-height:100vh;flex-direction:column}
+.am-topbar{background:var(--dark-blue);color:#fff;padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:58px;position:sticky;top:0;z-index:50;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.am-brand{font-size:17px;font-weight:800}
+.am-brand span{color:var(--orange)}
+.am-user{display:flex;align-items:center;gap:12px;font-size:13px}
+.am-role-tag{background:var(--mid-blue);padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600}
+.am-tabs{background:#fff;border-bottom:2px solid #E9ECF0;padding:0 24px;display:flex;gap:4px;overflow-x:auto;position:sticky;top:58px;z-index:40}
+.am-tab{background:none;border:none;padding:14px 18px;font-size:13px;font-weight:500;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .2s;white-space:nowrap}
+.am-tab:hover{color:var(--dark-blue)}
+.am-tab.active{color:var(--mid-blue);border-bottom-color:var(--mid-blue);font-weight:700}
+.am-content{padding:20px 24px;flex:1}
+
+/* ── COMPONENTS ──────────────────────────── */
+.card{background:var(--card);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);margin-bottom:18px}
+.card-title{font-size:14px;font-weight:700;color:var(--dark-blue);margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid var(--pale-blue);display:flex;align-items:center;justify-content:space-between}
+
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:18px}
+.stat-box{background:#fff;border-radius:var(--radius);padding:14px 16px;text-align:center;box-shadow:var(--shadow);border-top:4px solid var(--mid-blue)}
+.stat-box .n{font-size:28px;font-weight:800}
+.stat-box .l{font-size:11px;color:var(--muted);margin-top:3px}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--dark-blue);color:#fff;padding:10px 12px;text-align:left;font-weight:600;font-size:12px;white-space:nowrap}
+td{padding:9px 12px;border-bottom:1px solid #F0F0F0;vertical-align:middle}
+tr:hover td{background:var(--pale-blue)}
+.table-wrap{overflow-x:auto;border-radius:8px;box-shadow:var(--shadow)}
+
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;white-space:nowrap}
+.b-Technical{background:#BDD5EA;color:#1a5276}
+.b-On-Page{background:#D5F5E3;color:#1e8449}
+.b-Off-Page{background:#EBD5F5;color:#6c3483}
+.b-Analytics{background:#FDEBD0;color:#a04000}
+.b-Client{background:#FADBD8;color:#922b21}
+.b-Research{background:#D1F2EB;color:#0e6655}
+.b-AI-SEO{background:#D6EAF8;color:#1a5276}
+.b-Reporting{background:#FEF9E7;color:#9a7d0a}
+
+.status-sel{padding:4px 8px;border-radius:6px;border:1px solid #ddd;font-size:11px;font-weight:600;cursor:pointer;min-width:120px}
+.s-NotStarted{background:#F2F3F4;color:#566573}
+.s-InProgress{background:#FEF9E7;color:#9a7d0a}
+.s-Completed{background:#D5F5E3;color:#1e8449}
+.s-Overdue{background:#FADBD8;color:#922b21}
+.s-PendingReview{background:#FDEBD0;color:#a04000}
+
+.day-pill{display:inline-block;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700}
+.dp-Monday{background:#BDD5EA;color:#1a5276}
+.dp-Tuesday{background:#D1F2EB;color:#0e6655}
+.dp-Wednesday{background:#FEF9E7;color:#9a7d0a}
+.dp-Thursday{background:#FDEBD0;color:#a04000}
+.dp-Friday{background:#EBD5F5;color:#6c3483}
+.dp-EveryDay{background:#D6EAF8;color:#1a5276}
+
+.freq-pill{display:inline-block;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:700}
+.fp-daily{background:#D6EAF8;color:#1E3A5F}
+.fp-weekly{background:#D5F5E3;color:#1e8449}
+.fp-biweekly{background:#EBD5F5;color:#6c3483}
+.fp-monthly{background:#FDEBD0;color:#a04000}
+
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:8px;border:none;font-size:13px;font-weight:600;transition:all .2s}
+.btn-primary{background:var(--mid-blue);color:#fff}
+.btn-primary:hover{background:#2471a3}
+.btn-success{background:var(--green);color:#fff}
+.btn-success:hover{background:#219a52}
+.btn-danger{background:var(--red);color:#fff}
+.btn-sm{padding:6px 12px;font-size:12px}
+.btn-outline{background:#fff;border:2px solid var(--mid-blue);color:var(--mid-blue)}
+.btn-outline:hover{background:var(--pale-blue)}
+
+/* ── KANBAN ──────────────────────────────── */
+.kanban-board{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:start}
+.kanban-col{background:#F5F7FA;border-radius:var(--radius);padding:14px;min-height:200px}
+.kanban-col-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;font-size:13px;font-weight:700}
+.kanban-count{background:#fff;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.1)}
+.kanban-card{background:#fff;border-radius:8px;padding:12px 14px;margin-bottom:8px;box-shadow:0 2px 6px rgba(0,0,0,.06);cursor:grab;border-left:4px solid var(--mid-blue);transition:box-shadow .15s}
+.kanban-card:hover{box-shadow:0 4px 12px rgba(0,0,0,.12)}
+.kanban-card.dragging{opacity:.5;cursor:grabbing}
+.kanban-over{background:#EBF5FB;border:2px dashed var(--mid-blue)}
+.kc-name{font-size:12px;font-weight:700;margin-bottom:5px;line-height:1.3}
+.kc-meta{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+.kc-project{font-size:10px;color:var(--muted);margin-bottom:3px}
+
+/* ── PROJECT VIEW ───────────────────────── */
+.proj-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+.proj-tab{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;background:var(--pale-blue);color:var(--dark-blue);border:2px solid transparent;transition:all .15s}
+.proj-tab.active{background:var(--dark-blue);color:#fff}
+.proj-tab:hover{border-color:var(--mid-blue)}
+.proj-progress{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.proj-bar{flex:1;background:#E9ECF0;border-radius:6px;height:8px;overflow:hidden}
+.proj-bar-fill{height:100%;background:var(--green);border-radius:6px;transition:width .4s}
+
+/* ── MODAL ──────────────────────────────── */
+#modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center}
+#modal-overlay.open{display:flex}
+.modal{background:#fff;border-radius:14px;padding:28px 32px;width:92%;max-width:600px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.modal-title{font-size:18px;font-weight:700;color:var(--dark-blue);margin-bottom:20px;display:flex;justify-content:space-between;align-items:center}
+.modal-close{background:none;border:none;font-size:20px;color:var(--muted);line-height:1}
+.form-row{margin-bottom:14px}
+.form-label{display:block;font-size:12px;font-weight:700;color:var(--dark-blue);margin-bottom:5px}
+.form-input,.form-select,.form-textarea{width:100%;padding:9px 12px;border:2px solid #E9ECF0;border-radius:8px;font-size:13px;transition:border .2s;outline:none}
+.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--mid-blue)}
+.form-textarea{min-height:70px;resize:vertical}
+.form-row-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.checkbox-group{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.cb-item{display:flex;align-items:center;gap:6px;padding:6px 12px;background:var(--pale-blue);border-radius:8px;font-size:12px;cursor:pointer;user-select:none;border:2px solid transparent}
+.cb-item input{accent-color:var(--mid-blue)}
+.cb-item:has(input:checked){border-color:var(--mid-blue);background:#fff}
+.am-projects-section{background:var(--pale-blue);border-radius:8px;padding:12px;margin-top:8px;font-size:12px}
+.am-proj-group{margin-top:8px}
+.am-proj-group-title{font-weight:700;font-size:12px;color:var(--dark-blue);margin-bottom:4px}
+
+/* ── AVP OVERVIEW CARDS ─────────────────── */
+.am-overview-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.am-ov-card{background:#fff;border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+.am-ov-head{padding:14px 18px;color:#fff;display:flex;justify-content:space-between;align-items:center}
+.am-ov-name{font-size:15px;font-weight:700}
+.am-ov-email{font-size:11px;opacity:.8;margin-top:2px}
+.am-ov-body{padding:14px 18px}
+.am-ov-pcount{background:rgba(255,255,255,.2);padding:3px 10px;border-radius:14px;font-size:12px;font-weight:700}
+.prog-wrap{background:#E9ECF0;border-radius:6px;height:7px;margin:6px 0;overflow:hidden}
+.prog-bar{height:100%;background:var(--green);border-radius:6px;transition:width .4s}
+.status-counts{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.sc-item{font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600}
+
+/* ── TODAY VIEW ─────────────────────────── */
+.today-greeting{font-size:18px;font-weight:700;color:var(--dark-blue);margin-bottom:4px}
+.today-sub{font-size:13px;color:var(--muted);margin-bottom:18px}
+.task-row{display:flex;align-items:center;gap:12px;padding:12px 16px;background:#fff;border-radius:8px;margin-bottom:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);border-left:4px solid var(--pale-blue)}
+.task-row-main{flex:1;min-width:0}
+.task-row-name{font-size:13px;font-weight:600;margin-bottom:2px}
+.task-row-detail{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.task-row-meta{display:flex;gap:6px;margin-top:4px;flex-wrap:wrap}
+
+/* ── TOAST ──────────────────────────────── */
+#toast-container{position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast{background:#1A1A2E;color:#fff;padding:12px 18px;border-radius:10px;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.25);animation:slideIn .25s ease;min-width:220px}
+.toast.success{background:var(--green)}
+.toast.error{background:var(--red)}
+@keyframes slideIn{from{transform:translateX(60px);opacity:0}to{transform:translateX(0);opacity:1}}
+
+/* ── FILTERS ─────────────────────────────── */
+.filter-bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.filter-chip{padding:5px 12px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;background:var(--pale-blue);color:var(--dark-blue);border:2px solid transparent}
+.filter-chip.active{background:var(--dark-blue);color:#fff}
+.search-input{padding:7px 12px;border:2px solid #E9ECF0;border-radius:8px;font-size:12px;outline:none;width:180px}
+.search-input:focus{border-color:var(--mid-blue)}
+
+/* ── LOADING ─────────────────────────────── */
+.spinner{display:inline-block;width:20px;height:20px;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loader{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--dark-blue);color:#fff;flex-direction:column;gap:14px}
+#loader .logo{font-size:24px;font-weight:800}.#loader .logo span{color:var(--orange)}
+.empty-state{text-align:center;padding:40px;color:var(--muted)}
+.empty-state .icon{font-size:40px;margin-bottom:10px}
+
+/* ── ALERTS ──────────────────────────────── */
+.alert{padding:12px 16px;border-radius:8px;font-size:12px;margin-bottom:14px;display:flex;align-items:center;gap:10px}
+.alert-warning{background:var(--light-yellow);color:#7d6608;border-left:4px solid var(--yellow)}
+.alert-danger{background:var(--light-red);color:#922b21;border-left:4px solid var(--red)}
+.alert-info{background:var(--pale-blue);color:#1a5276;border-left:4px solid var(--mid-blue)}
+
+/* ── RESPONSIVE ──────────────────────────── */
+@media(max-width:900px){
+  .kanban-board{grid-template-columns:1fr 1fr}
+  .sidebar{width:200px}.avp-main{margin-left:200px}
+}
+@media(max-width:640px){
+  .sidebar{transform:translateX(-100%);transition:transform .3s}
+  .sidebar.open{transform:translateX(0)}
+  .avp-main{margin-left:0}
+  .kanban-board{grid-template-columns:1fr}
+  .form-row-2{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- Firebase is initialized below using the v8 compat SDK -->
+
+<!-- LOADING -->
+<div id="loader">
+  <div class="logo"><span>88</span>GRAVITY</div>
+  <div class="spinner"></div>
+  <div style="font-size:13px;opacity:.7">Loading SEO Dashboard...</div>
+</div>
+
+<!-- LOGIN -->
+<div id="login-screen" style="display:none">
+  <div class="login-card">
+    <div class="login-logo"><span>88</span>GRAVITY</div>
+    <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:4px">SEO Team Dashboard</div>
+    <div class="login-sub">Sign in with your @88gravity.com Google account</div>
+    <button class="btn-google" onclick="signInGoogle()">
+      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="G">
+      Continue with Google
+    </button>
+    <div class="login-note">
+      Access is restricted to @88gravity.com accounts only.<br>
+      Your role (AVP / AM) is assigned automatically based on your email.
+    </div>
+  </div>
+</div>
+
+<!-- APP ROOT -->
+<div id="app" style="display:none">
+
+  <!-- ========== AVP APP ========== -->
+  <div id="avp-app">
+    <div class="avp-layout">
+      <nav class="sidebar">
+        <div class="sidebar-brand">
+          <div class="brand"><span>88</span>GRAVITY</div>
+          <div class="role-tag">👑 AVP</div>
+        </div>
+        <div class="sidebar-user">
+          <strong id="avp-name">Kuldeep</strong>
+          <span id="avp-email">kuldeep@88gravity.com</span>
+        </div>
+        <div class="sidebar-nav">
+          <div class="nav-item active" onclick="avpNav('overview',this)"><span class="nav-icon">📊</span>Overview</div>
+          <div class="nav-item" onclick="avpNav('allocate',this)"><span class="nav-icon">➕</span>Allocate Task</div>
+          <div class="nav-item" onclick="avpNav('tasks',this)"><span class="nav-icon">📋</span>All Tasks</div>
+          <div class="nav-item" onclick="avpNav('birbal',this)"><span class="nav-icon">👤</span>Birbal's Board</div>
+          <div class="nav-item" onclick="avpNav('ajay',this)"><span class="nav-icon">👤</span>Ajay's Board</div>
+          <div class="nav-item" onclick="avpNav('ambuj',this)"><span class="nav-icon">👤</span>Ambuj's Board</div>
+          <div class="nav-item" onclick="avpNav('reports',this)"><span class="nav-icon">📈</span>Reports</div>
+        </div>
+        <div class="sidebar-footer">
+          <button class="btn-logout" onclick="signOut()">⬅ Sign Out</button>
+        </div>
+      </nav>
+      <main class="avp-main">
+        <div id="avp-overview" class="avp-view">
+          <div class="page-header"><h1>📊 Team Overview</h1><p id="avp-date-display"></p></div>
+          <div id="avp-alerts"></div>
+          <div class="stats-row" id="avp-stats"></div>
+          <div class="am-overview-grid" id="avp-am-cards"></div>
+          <div class="card" id="avp-overdue-section" style="display:none">
+            <div class="card-title">🚨 Overdue Tasks</div>
+            <div id="avp-overdue-list"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">📅 Today's Team Tasks <span id="today-day-label"></span></div>
+            <div id="avp-today-tasks"></div>
+          </div>
+        </div>
+
+        <div id="avp-allocate" class="avp-view" style="display:none">
+          <div class="page-header"><h1>➕ Allocate Task</h1><p>Assign a new recurring task to one or more AMs across their projects.</p></div>
+          <div class="card" style="max-width:680px">
+            <form id="allocate-form" onsubmit="submitTask(event)">
+              <div class="form-row">
+                <label class="form-label">Task Name *</label>
+                <input class="form-input" id="f-name" placeholder="e.g. Weekly Competitor Snapshot" required>
+              </div>
+              <div class="form-row">
+                <label class="form-label">Task Details / Instructions</label>
+                <textarea class="form-textarea" id="f-detail" placeholder="What exactly should the AM/executive do?"></textarea>
+              </div>
+              <div class="form-row-2">
+                <div class="form-row">
+                  <label class="form-label">Category *</label>
+                  <select class="form-select" id="f-cat" required>
+                    <option value="">Select category</option>
+                    <option>Technical</option><option>On-Page</option><option>Off-Page</option>
+                    <option>Analytics</option><option>Client</option><option>Research</option>
+                    <option>AI-SEO</option><option>Reporting</option>
+                  </select>
+                </div>
+                <div class="form-row">
+                  <label class="form-label">Priority</label>
+                  <select class="form-select" id="f-prio">
+                    <option value="high">🔴 High</option>
+                    <option value="medium" selected>🟡 Medium</option>
+                    <option value="low">🟢 Low</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row-2">
+                <div class="form-row">
+                  <label class="form-label">Frequency *</label>
+                  <select class="form-select" id="f-freq" onchange="onFreqChange()" required>
+                    <option value="">Select frequency</option>
+                    <option value="daily-everyday">Daily – Every Day</option>
+                    <option value="daily-monday">Daily – Monday only</option>
+                    <option value="daily-tuesday">Daily – Tuesday only</option>
+                    <option value="daily-wednesday">Daily – Wednesday only</option>
+                    <option value="daily-thursday">Daily – Thursday only</option>
+                    <option value="daily-friday">Daily – Friday only</option>
+                    <option value="weekly">Weekly (pick day below)</option>
+                    <option value="biweekly">Biweekly (pick day below)</option>
+                    <option value="monthly">Monthly (specify timing below)</option>
+                  </select>
+                </div>
+                <div class="form-row" id="f-day-row" style="display:none">
+                  <label class="form-label">Day of Week</label>
+                  <select class="form-select" id="f-day">
+                    <option value="Monday">Monday</option><option value="Tuesday">Tuesday</option>
+                    <option value="Wednesday">Wednesday</option><option value="Thursday">Thursday</option>
+                    <option value="Friday">Friday</option>
+                  </select>
+                </div>
+                <div class="form-row" id="f-due-row" style="display:none">
+                  <label class="form-label">Due / Timing</label>
+                  <input class="form-input" id="f-due" placeholder="e.g. By 26th, 1st Monday, 4th of Month">
+                </div>
+              </div>
+              <div class="form-row">
+                <label class="form-label">Assign to AMs *</label>
+                <div class="checkbox-group" id="f-ams">
+                  <label class="cb-item"><input type="checkbox" value="birbal" onchange="onAMSelect()"> Birbal Sharma</label>
+                  <label class="cb-item"><input type="checkbox" value="ajay" onchange="onAMSelect()"> Ajay Kumar</label>
+                  <label class="cb-item"><input type="checkbox" value="ambuj" onchange="onAMSelect()"> Ambuj Surothiya</label>
+                  <label class="cb-item"><input type="checkbox" id="f-all-ams" onchange="selectAllAMs()"> ✅ All AMs</label>
+                </div>
+              </div>
+              <div class="form-row" id="f-projects-row" style="display:none">
+                <label class="form-label">Assign to Projects</label>
+                <div id="f-projects-container"></div>
+              </div>
+              <div class="form-row">
+                <label class="form-label">Start From</label>
+                <select class="form-select" id="f-start" style="max-width:280px">
+                  <option value="now">Immediately (current cycle)</option>
+                  <option value="next">Next cycle (next week/month)</option>
+                </select>
+              </div>
+              <div style="display:flex;gap:10px;margin-top:8px">
+                <button type="submit" class="btn btn-primary" id="f-submit-btn">Allocate Task</button>
+                <button type="button" class="btn btn-outline" onclick="resetForm()">Clear</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div id="avp-tasks" class="avp-view" style="display:none">
+          <div class="page-header"><h1>📋 All Tasks</h1><p>View and manage all task templates assigned to your team.</p></div>
+          <div class="filter-bar">
+            <input class="search-input" id="tasks-search" placeholder="🔍 Search tasks..." oninput="filterTasksList()">
+            <select class="form-select" id="tasks-filter-am" style="width:160px" onchange="filterTasksList()">
+              <option value="">All AMs</option>
+              <option value="birbal">Birbal</option><option value="ajay">Ajay</option><option value="ambuj">Ambuj</option>
+            </select>
+            <select class="form-select" id="tasks-filter-freq" style="width:140px" onchange="filterTasksList()">
+              <option value="">All Frequencies</option>
+              <option value="daily">Daily</option><option value="weekly">Weekly</option>
+              <option value="biweekly">Biweekly</option><option value="monthly">Monthly</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table><thead><tr><th>Task Name</th><th>Category</th><th>Frequency</th><th>Day/Due</th><th>AMs</th><th>Projects</th><th>Actions</th></tr></thead>
+            <tbody id="tasks-table-body"></tbody></table>
+          </div>
+        </div>
+
+        <!-- Per-AM boards (AVP view) -->
+        <div id="avp-birbal" class="avp-view" style="display:none"></div>
+        <div id="avp-ajay"   class="avp-view" style="display:none"></div>
+        <div id="avp-ambuj"  class="avp-view" style="display:none"></div>
+
+        <div id="avp-reports" class="avp-view" style="display:none">
+          <div class="page-header"><h1>📈 Reports</h1><p>Monthly performance summary across all projects.</p></div>
+          <div class="card">
+            <div class="card-title">Completion Rates This Week</div>
+            <div id="reports-content"><div class="empty-state"><div class="icon">📊</div>Loading report data...</div></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ========== AM APP ========== -->
+  <div id="am-app" style="display:none;flex-direction:column">
+    <div class="am-topbar">
+      <div class="am-brand"><span>88</span>GRAVITY SEO</div>
+      <div class="am-user">
+        <div>
+          <div id="am-display-name" style="font-weight:700;font-size:13px"></div>
+          <div id="am-display-email" style="font-size:10px;opacity:.7"></div>
+        </div>
+        <span class="am-role-tag">Account Manager</span>
+        <button class="btn-logout" style="padding:6px 12px;font-size:12px" onclick="signOut()">Sign Out</button>
+      </div>
+    </div>
+    <div class="am-tabs">
+      <button class="am-tab active" onclick="amTab('today',this)">🏠 Today</button>
+      <button class="am-tab" onclick="amTab('mytasks',this)">👤 My Tasks</button>
+      <button class="am-tab" onclick="amTab('projects',this)">📁 By Project</button>
+      <button class="am-tab" onclick="amTab('kanban',this)">🗂️ Kanban</button>
+    </div>
+    <div class="am-content">
+      <!-- TODAY VIEW -->
+      <div id="am-today">
+        <div class="today-greeting" id="am-greeting"></div>
+        <div class="today-sub" id="am-date-sub"></div>
+        <div id="am-today-alerts"></div>
+        <div class="stats-row" id="am-today-stats"></div>
+        <div id="am-today-list"></div>
+      </div>
+      <!-- MY TASKS VIEW -->
+      <div id="am-mytasks" style="display:none">
+        <div class="filter-bar">
+          <input class="search-input" id="mt-search" placeholder="🔍 Search..." oninput="renderMyTasks()">
+          <div id="mt-proj-filters" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+          <select class="form-select" id="mt-freq-filter" style="width:130px" onchange="renderMyTasks()">
+            <option value="">All Types</option>
+            <option value="daily">Daily</option><option value="weekly">Weekly</option>
+            <option value="biweekly">Biweekly</option><option value="monthly">Monthly</option>
+          </select>
+        </div>
+        <div id="am-mytasks-list"></div>
+      </div>
+      <!-- BY PROJECT VIEW -->
+      <div id="am-projects" style="display:none">
+        <div class="proj-tabs" id="am-proj-tabs"></div>
+        <div id="am-proj-content"></div>
+      </div>
+      <!-- KANBAN VIEW -->
+      <div id="am-kanban" style="display:none">
+        <div class="filter-bar">
+          <select class="form-select" id="kb-proj-filter" style="width:150px" onchange="renderKanban()">
+            <option value="">All Projects</option>
+          </select>
+          <select class="form-select" id="kb-freq-filter" style="width:130px" onchange="renderKanban()">
+            <option value="">All Types</option>
+            <option value="daily">Daily</option><option value="weekly">Weekly</option>
+            <option value="biweekly">Biweekly</option><option value="monthly">Monthly</option>
+          </select>
+        </div>
+        <div class="kanban-board" id="kanban-board"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL OVERLAY (task detail / edit) -->
+<div id="modal-overlay">
+  <div class="modal" id="task-detail-modal">
+    <div class="modal-title">
+      <span id="modal-task-name">Task Detail</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast-container"></div>
+
+
+
+<script>
+// ================================================================
+// 1. FIREBASE CONFIG
+// ================================================================
+const firebaseConfig = {
+  apiKey:            "AIzaSyBYc7WiPoeoF0R79eXvfX8BKRD5KpMECpA",
+  authDomain:        "gravity-seo-tracker.firebaseapp.com",
+  projectId:         "gravity-seo-tracker",
+  storageBucket:     "gravity-seo-tracker.firebasestorage.app",
+  messagingSenderId: "135324094846",
+  appId:             "1:135324094846:web:a215bd1adffca9fc95a32f"
+};
+
+// ================================================================
+// 2. ROLE MAP — maps email → role & AM info
+// ================================================================
+const ROLE_MAP = {
+  "kuldeep@88gravity.com":       { role:"avp", name:"Kuldeep" },
+  "birbal@88gravity.com":        { role:"am",  name:"Birbal Sharma",   amId:"birbal" },
+  "ajay@88gravity.com":          { role:"am",  name:"Ajay Kumar",      amId:"ajay"   },
+  "ambujsurothiya@88gravity.com":{ role:"am",  name:"Ambuj Surothiya", amId:"ambuj"  },
+};
+
+const AM_CONFIG = {
+  birbal: { name:"Birbal Sharma",   email:"birbal@88gravity.com",        projects:Array.from({length:7}, (_,i)=>`Project ${i+1}`),  color:"linear-gradient(135deg,#1E3A5F,#2E86AB)" },
+  ajay:   { name:"Ajay Kumar",      email:"ajay@88gravity.com",           projects:Array.from({length:8}, (_,i)=>`Project ${i+1}`),  color:"linear-gradient(135deg,#148F77,#1ABC9C)" },
+  ambuj:  { name:"Ambuj Surothiya", email:"ambujsurothiya@88gravity.com", projects:Array.from({length:10},(_,i)=>`Project ${i+1}`), color:"linear-gradient(135deg,#8E44AD,#9B59B6)" },
+};
+
+const CAT_CLASS = { "Technical":"b-Technical","On-Page":"b-On-Page","Off-Page":"b-Off-Page","Analytics":"b-Analytics","Client":"b-Client","Research":"b-Research","AI-SEO":"b-AI-SEO","Reporting":"b-Reporting" };
+const STATUS_VALS = ["Not Started","In Progress","Completed","Overdue","Pending Review"];
+const STATUS_CLASS = { "Not Started":"s-NotStarted","In Progress":"s-InProgress","Completed":"s-Completed","Overdue":"s-Overdue","Pending Review":"s-PendingReview" };
+const KANBAN_COLS = [
+  {id:"todo",     label:"⏳ To Do",        statuses:["Not Started"],             color:"#566573"},
+  {id:"progress", label:"🔄 In Progress",  statuses:["In Progress"],              color:"#D4AC0D"},
+  {id:"review",   label:"👁️ Pending Review", statuses:["Pending Review"],        color:"#E67E22"},
+  {id:"done",     label:"✅ Done",          statuses:["Completed"],               color:"#27AE60"},
+];
+
+// ================================================================
+// 3. FIREBASE INIT
+// ================================================================
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+// ================================================================
+// 4. GLOBAL STATE
+// ================================================================
+let currentUser = null;
+let currentRole = null;
+let currentAmId = null;
+let myInstances = [];      // AM: live task instances
+let allTemplates = [];     // Cache of task templates
+let allInstances = {};     // AVP: { amId: [instances] }
+let unsubListeners = [];   // Firestore unsubscribe fns
+
+// ================================================================
+// 5. AUTH
+// ================================================================
+function signInGoogle() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  provider.setCustomParameters({ hd: "88gravity.com" });
+  auth.signInWithPopup(provider).catch(err => {
+    toast("Sign-in failed: " + err.message, "error");
+  });
+}
+function signOut() {
+  unsubListeners.forEach(fn => fn());
+  auth.signOut();
+}
+
+auth.onAuthStateChanged(async user => {
+  document.getElementById('loader').style.display = 'none';
+  if (!user) {
+    showScreen('login-screen');
+    return;
+  }
+  const info = ROLE_MAP[user.email];
+  if (!info) {
+    toast("Access denied. Only @88gravity.com team members allowed.", "error");
+    auth.signOut(); return;
+  }
+  currentUser = user;
+  currentRole = info.role;
+  currentAmId = info.amId || null;
+
+  // Ensure user doc in Firestore
+  await db.collection('users').doc(user.uid).set({ email:user.email, name:info.name, role:info.role, amId:info.amId||null }, { merge:true });
+
+  showScreen('app');
+  if (currentRole === 'avp') initAVP();
+  else initAM();
+});
+
+function showScreen(id) {
+  ['loader','login-screen','app'].forEach(s => document.getElementById(s).style.display = 'none');
+  document.getElementById(id).style.display = 'flex';
+  if (id === 'app') document.getElementById('app').style.display = 'block';
+}
+
+// ================================================================
+// 6. DATE HELPERS
+// ================================================================
+function getWeekNum(d) {
+  const dt = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = dt.getUTCDay() || 7;
+  dt.setUTCDate(dt.getUTCDate() + 4 - day);
+  const y = new Date(Date.UTC(dt.getUTCFullYear(), 0, 1));
+  return Math.ceil((((dt - y) / 86400000) + 1) / 7);
+}
+function todayStr()  { return new Date().toISOString().split('T')[0]; }
+function weekKey()   { const now=new Date(); return `${now.getFullYear()}-W${String(getWeekNum(now)).padStart(2,'0')}`; }
+function biWeekKey() { const w=getWeekNum(new Date()); return `BW-${Math.ceil(w/2)}-${new Date().getFullYear()}`; }
+function monthKey()  { const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`; }
+function dayName()   { return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getDay()]; }
+function formatDate(d) { return new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}); }
+
+// ================================================================
+// 7. TASK ENGINE — Generate recurring instances
+// ================================================================
+function getInstanceId(templateId, amId, project, freq) {
+  const safe = project.replace(/\s+/g,'_');
+  let period;
+  if (freq.startsWith('daily')) period = todayStr();
+  else if (freq === 'weekly')   period = weekKey();
+  else if (freq === 'biweekly') period = biWeekKey();
+  else                          period = monthKey();
+  return `${templateId}__${amId}__${safe}__${period}`;
+}
+
+async function ensureInstances(amId, projects, templates) {
+  const now = new Date();
+  // Use a "period init" marker to avoid N reads
+  const dayK  = todayStr();
+  const wk    = weekKey();
+  const bwk   = biWeekKey();
+  const moK   = monthKey();
+
+  // Check what periods are already initialized
+  const initRef = db.collection('periodInit');
+  const [dayDoc, weekDoc, biDoc, moDoc] = await Promise.all([
+    initRef.doc(`${amId}-${dayK}`).get(),
+    initRef.doc(`${amId}-${wk}`).get(),
+    initRef.doc(`${amId}-${bwk}`).get(),
+    initRef.doc(`${amId}-${moK}`).get(),
+  ]);
+
+  const needDay  = !dayDoc.exists;
+  const needWeek = !weekDoc.exists;
+  const needBi   = !biDoc.exists;
+  const needMo   = !moDoc.exists;
+
+  if (!needDay && !needWeek && !needBi && !needMo) return;
+
+  const batch = db.batch();
+  let count = 0;
+
+  templates.forEach(t => {
+    const assignedProjects = t.assignedToProjects?.[amId] || [];
+    if (!assignedProjects.length) return;
+
+    const freq = t.frequency;
+    const shouldRun = (
+      (freq === 'daily' && needDay) ||
+      (freq === 'weekly' && needWeek) ||
+      (freq === 'biweekly' && needBi) ||
+      (freq === 'monthly' && needMo)
+    );
+    if (!shouldRun) return;
+
+    // Check day filter for daily tasks
+    if (freq === 'daily' && t.day && t.day !== 'Every Day' && t.day !== dayName()) return;
+
+    assignedProjects.forEach(proj => {
+      if (!projects.includes(proj)) return;
+      const id = getInstanceId(t.id, amId, proj, freq);
+      const ref = db.collection('taskInstances').doc(id);
+      batch.set(ref, {
+        templateId: t.id, amId, project: proj, name: t.name,
+        detail: t.detail||'', category: t.category||'', frequency: freq,
+        day: t.day||'', due: t.due||'', priority: t.priority||'medium',
+        periodKey: freq==='daily'?dayK : freq==='weekly'?wk : freq==='biweekly'?bwk : moK,
+        status: 'Not Started', notes: '', completedAt: null, updatedBy: null,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      }, { merge: false });
+      count++;
+      if (count >= 400) { /* Firestore batch limit guard */ return; }
+    });
+  });
+
+  // Mark periods as initialized
+  if (needDay)  batch.set(initRef.doc(`${amId}-${dayK}`),  { at: firebase.firestore.FieldValue.serverTimestamp() });
+  if (needWeek) batch.set(initRef.doc(`${amId}-${wk}`),    { at: firebase.firestore.FieldValue.serverTimestamp() });
+  if (needBi)   batch.set(initRef.doc(`${amId}-${bwk}`),   { at: firebase.firestore.FieldValue.serverTimestamp() });
+  if (needMo)   batch.set(initRef.doc(`${amId}-${moK}`),   { at: firebase.firestore.FieldValue.serverTimestamp() });
+
+  if (count > 0) {
+    try { await batch.commit(); }
+    catch(e) { /* instances may already exist — ok */ }
+  }
+}
+
+// ================================================================
+// 8. AVP MODULE
+// ================================================================
+async function initAVP() {
+  document.getElementById('avp-app').style.display = 'block';
+  document.getElementById('avp-name').textContent  = currentUser.displayName || 'Kuldeep';
+  document.getElementById('avp-email').textContent = currentUser.email;
+  const now = new Date();
+  document.getElementById('avp-date-display').textContent =
+    `${dayName()}, ${now.toLocaleDateString('en-IN',{day:'2-digit',month:'long',year:'numeric'})} · Week ${getWeekNum(now)}`;
+  document.getElementById('today-day-label').textContent = `(${dayName()})`;
+
+  await loadTemplates();
+  subscribeAVPInstances();
+  checkDeadlineAlerts();
+}
+
+function avpNav(view, el) {
+  document.querySelectorAll('.avp-view').forEach(v => v.style.display = 'none');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('avp-'+view).style.display = 'block';
+  el.classList.add('active');
+  if (view === 'tasks')    renderTasksList();
+  if (view === 'birbal')   renderAMBoardAVP('birbal');
+  if (view === 'ajay')     renderAMBoardAVP('ajay');
+  if (view === 'ambuj')    renderAMBoardAVP('ambuj');
+  if (view === 'reports')  renderReports();
+}
+
+async function loadTemplates() {
+  const snap = await db.collection('taskTemplates').where('active','==',true).get();
+  allTemplates = snap.docs.map(d => ({id:d.id,...d.data()}));
+  // Seed defaults if empty
+  if (allTemplates.length === 0) await seedDefaultTasks();
+  else renderAVPOverview();
+}
+
+function subscribeAVPInstances() {
+  const wk = weekKey(); const moK = monthKey(); const dayK = todayStr();
+  unsubListeners.forEach(fn=>fn());
+  unsubListeners = [];
+  ['birbal','ajay','ambuj'].forEach(amId => {
+    const unsub = db.collection('taskInstances').where('amId','==',amId)
+      .where('periodKey','in',[dayK, wk, monthKey(), biWeekKey()])
+      .onSnapshot(snap => {
+        allInstances[amId] = snap.docs.map(d=>({id:d.id,...d.data()}));
+        renderAVPOverview();
+      });
+    unsubListeners.push(unsub);
+  });
+}
+
+function renderAVPOverview() {
+  const stats = document.getElementById('avp-stats');
+  let totalTasks=0, totalDone=0, totalOverdue=0;
+  Object.values(allInstances).forEach(arr => {
+    totalTasks += arr.length;
+    totalDone  += arr.filter(t=>t.status==='Completed').length;
+    totalOverdue+=arr.filter(t=>t.status==='Overdue').length;
+  });
+  const pct = totalTasks ? Math.round(totalDone/totalTasks*100) : 0;
+  stats.innerHTML = `
+    <div class="stat-box" style="border-top-color:var(--dark-blue)"><div class="n" style="color:var(--dark-blue)">${totalTasks}</div><div class="l">Tasks This Period</div></div>
+    <div class="stat-box" style="border-top-color:var(--green)"><div class="n" style="color:var(--green)">${totalDone}</div><div class="l">Completed</div></div>
+    <div class="stat-box" style="border-top-color:var(--orange)"><div class="n" style="color:var(--orange)">${totalTasks-totalDone}</div><div class="l">Pending</div></div>
+    <div class="stat-box" style="border-top-color:var(--red)"><div class="n" style="color:var(--red)">${totalOverdue}</div><div class="l">Overdue</div></div>
+    <div class="stat-box" style="border-top-color:var(--mid-blue)"><div class="n" style="color:var(--mid-blue)">${pct}%</div><div class="l">Completion Rate</div></div>
+  `;
+
+  // AM cards
+  const grid = document.getElementById('avp-am-cards');
+  grid.innerHTML = '';
+  ['birbal','ajay','ambuj'].forEach(amId => {
+    const cfg  = AM_CONFIG[amId];
+    const inst = allInstances[amId] || [];
+    const done = inst.filter(t=>t.status==='Completed').length;
+    const ovr  = inst.filter(t=>t.status==='Overdue').length;
+    const inp  = inst.filter(t=>t.status==='In Progress').length;
+    const pct  = inst.length ? Math.round(done/inst.length*100) : 0;
+    grid.innerHTML += `
+      <div class="am-ov-card">
+        <div class="am-ov-head" style="background:${cfg.color}">
+          <div><div class="am-ov-name">🧑‍💼 ${cfg.name}</div><div class="am-ov-email">${cfg.email}</div></div>
+          <div class="am-ov-pcount">${cfg.projects.length} Projects</div>
+        </div>
+        <div class="am-ov-body">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+            <span>${inst.length} tasks this period</span><strong>${pct}%</strong>
+          </div>
+          <div class="prog-wrap"><div class="prog-bar" style="width:${pct}%"></div></div>
+          <div class="status-counts">
+            <span class="sc-item" style="background:#D5F5E3;color:#1e8449">✅ ${done} Done</span>
+            <span class="sc-item" style="background:#FEF9E7;color:#9a7d0a">🔄 ${inp} In Progress</span>
+            ${ovr ? `<span class="sc-item" style="background:#FADBD8;color:#922b21">🚨 ${ovr} Overdue</span>` : ''}
+          </div>
+        </div>
+      </div>`;
+  });
+
+  // Today's tasks section
+  const todayDiv = document.getElementById('avp-today-tasks');
+  const dn = dayName();
+  const todayInsts = Object.entries(allInstances).flatMap(([amId, arr]) =>
+    arr.filter(t => t.frequency==='daily' || t.day===dn)
+  );
+  if (todayInsts.length === 0) {
+    todayDiv.innerHTML = `<div class="empty-state"><div class="icon">📋</div><p>No task instances loaded yet. AMs need to log in to generate their tasks.</p></div>`;
+  } else {
+    todayDiv.innerHTML = `<div class="table-wrap"><table><thead><tr><th>AM</th><th>Project</th><th>Task</th><th>Category</th><th>Status</th></tr></thead><tbody>
+      ${todayInsts.slice(0,50).map(t=>`<tr>
+        <td><strong>${AM_CONFIG[t.amId]?.name||t.amId}</strong></td>
+        <td>${t.project}</td>
+        <td>${t.name}</td>
+        <td><span class="badge ${CAT_CLASS[t.category]||''}">${t.category}</span></td>
+        <td><span class="badge ${STATUS_CLASS[t.status]||''}">${t.status}</span></td>
+      </tr>`).join('')}
+    </tbody></table></div>`;
+  }
+
+  // Overdue
+  const overdue = Object.values(allInstances).flat().filter(t=>t.status==='Overdue');
+  const ovSec = document.getElementById('avp-overdue-section');
+  if (overdue.length > 0) {
+    ovSec.style.display = 'block';
+    document.getElementById('avp-overdue-list').innerHTML = overdue.slice(0,20).map(t=>
+      `<div class="task-row" style="border-left-color:var(--red)">
+        <div class="task-row-main"><div class="task-row-name">🚨 ${t.name}</div>
+          <div class="task-row-detail">${AM_CONFIG[t.amId]?.name} · ${t.project}</div>
+        </div>
+        <span class="badge ${CAT_CLASS[t.category]||''}">${t.category}</span>
+      </div>`).join('');
+  } else { ovSec.style.display = 'none'; }
+}
+
+function renderAMBoardAVP(amId) {
+  const el = document.getElementById('avp-'+amId);
+  const cfg = AM_CONFIG[amId];
+  const inst = allInstances[amId] || [];
+  const grouped = {};
+  inst.forEach(t => { if (!grouped[t.project]) grouped[t.project]=[]; grouped[t.project].push(t); });
+  let html = `<div class="page-header"><h1>👤 ${cfg.name}</h1><p>${cfg.email} · ${cfg.projects.length} Projects</p></div>`;
+  cfg.projects.forEach(proj => {
+    const tasks = grouped[proj] || [];
+    const done = tasks.filter(t=>t.status==='Completed').length;
+    const pct = tasks.length ? Math.round(done/tasks.length*100) : 0;
+    html += `<div class="card">
+      <div class="card-title">${proj} <span style="font-size:12px;color:var(--muted)">${done}/${tasks.length} · ${pct}%</span></div>
+      ${tasks.length === 0 ? '<div class="empty-state" style="padding:10px"><p>No tasks generated yet</p></div>' :
+        `<div class="table-wrap"><table><thead><tr><th>Task</th><th>Freq</th><th>Day/Due</th><th>Cat</th><th>Status</th></tr></thead><tbody>
+          ${tasks.map(t=>`<tr>
+            <td><strong>${t.name}</strong>${t.detail?`<div style="font-size:10px;color:var(--muted)">${t.detail.substring(0,60)}${t.detail.length>60?'...':''}</div>`:''}
+            </td>
+            <td><span class="freq-pill fp-${t.frequency}">${t.frequency}</span></td>
+            <td style="font-size:11px">${t.day||t.due||'—'}</td>
+            <td><span class="badge ${CAT_CLASS[t.category]||''}">${t.category}</span></td>
+            <td><span class="badge ${STATUS_CLASS[t.status]||''}">${t.status}</span></td>
+          </tr>`).join('')}
+        </tbody></table></div>`
+      }
+    </div>`;
+  });
+  el.innerHTML = html;
+}
+
+function renderTasksList() {
+  const search  = document.getElementById('tasks-search').value.toLowerCase();
+  const amFilt  = document.getElementById('tasks-filter-am').value;
+  const freqFilt= document.getElementById('tasks-filter-freq').value;
+  const tbody   = document.getElementById('tasks-table-body');
+  let filtered  = allTemplates.filter(t =>
+    (!search || t.name.toLowerCase().includes(search) || (t.detail||'').toLowerCase().includes(search)) &&
+    (!amFilt  || (t.assignedToAMs||[]).includes(amFilt)) &&
+    (!freqFilt|| t.frequency === freqFilt)
+  );
+  tbody.innerHTML = filtered.map(t => {
+    const ams = (t.assignedToAMs||[]).map(a=>AM_CONFIG[a]?.name||a).join(', ');
+    const projCount = Object.values(t.assignedToProjects||{}).flat().length;
+    return `<tr>
+      <td><strong>${t.name}</strong>${t.detail?`<div style="font-size:10px;color:var(--muted)">${t.detail.substring(0,50)}...</div>`:''}</td>
+      <td><span class="badge ${CAT_CLASS[t.category]||''}">${t.category}</span></td>
+      <td><span class="freq-pill fp-${t.frequency}">${t.frequency}</span></td>
+      <td style="font-size:11px">${t.day||t.due||'—'}</td>
+      <td style="font-size:12px">${ams||'—'}</td>
+      <td style="font-size:12px">${projCount} projects</td>
+      <td><button class="btn btn-sm btn-danger" onclick="deleteTemplate('${t.id}')">🗑</button></td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">No tasks found</td></tr>`;
+}
+
+function filterTasksList() { renderTasksList(); }
+
+async function deleteTemplate(id) {
+  if (!confirm('Delete this task? Existing instances won\'t be removed.')) return;
+  await db.collection('taskTemplates').doc(id).update({ active:false });
+  allTemplates = allTemplates.filter(t=>t.id!==id);
+  renderTasksList();
+  toast('Task deactivated', 'success');
+}
+
+function renderReports() {
+  const el = document.getElementById('reports-content');
+  const rows = ['birbal','ajay','ambuj'].map(amId => {
+    const cfg = AM_CONFIG[amId];
+    const inst = allInstances[amId] || [];
+    const done = inst.filter(t=>t.status==='Completed').length;
+    const total = inst.length;
+    const pct = total ? Math.round(done/total*100) : 0;
+    const bar = `<div class="prog-wrap" style="width:150px"><div class="prog-bar" style="width:${pct}%"></div></div>`;
+    return `<tr><td><strong>${cfg.name}</strong></td><td>${total}</td><td>${done}</td><td>${total-done}</td><td>${pct}%</td><td>${bar}</td></tr>`;
+  }).join('');
+  el.innerHTML = `<div class="table-wrap"><table><thead><tr><th>AM</th><th>Total Tasks</th><th>Completed</th><th>Pending</th><th>Rate</th><th>Progress</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function checkDeadlineAlerts() {
+  const d = new Date().getDate();
+  const alerts = document.getElementById('avp-alerts');
+  let html = '';
+  if (d >= 24 && d <= 26) html += `<div class="alert alert-warning">⚠️ <strong>Content Calendar deadline approaching!</strong> All AMs must complete next month's content plan by the 26th.</div>`;
+  if (d >= 2  && d <= 4)  html += `<div class="alert alert-danger">🚨 <strong>Monthly Reports due by 4th!</strong> Ensure all AMs send PDF reports to clients today.</div>`;
+  alerts.innerHTML = html;
+}
+
+// ================================================================
+// 9. TASK ALLOCATION FORM
+// ================================================================
+function onFreqChange() {
+  const freq = document.getElementById('f-freq').value;
+  document.getElementById('f-day-row').style.display = (freq==='weekly'||freq==='biweekly') ? 'block' : 'none';
+  document.getElementById('f-due-row').style.display = freq==='monthly' ? 'block' : 'none';
+}
+
+function selectAllAMs() {
+  const checked = document.getElementById('f-all-ams').checked;
+  document.querySelectorAll('#f-ams input[type="checkbox"]:not(#f-all-ams)').forEach(cb => { cb.checked = checked; });
+  onAMSelect();
+}
+
+function onAMSelect() {
+  const selected = [...document.querySelectorAll('#f-ams input[type="checkbox"]:not(#f-all-ams):checked')].map(cb=>cb.value);
+  const container = document.getElementById('f-projects-container');
+  const row = document.getElementById('f-projects-row');
+  if (selected.length === 0) { row.style.display='none'; return; }
+  row.style.display = 'block';
+  container.innerHTML = selected.map(amId => {
+    const cfg = AM_CONFIG[amId];
+    return `<div class="am-proj-group">
+      <div class="am-proj-group-title">${cfg.name}:</div>
+      <div class="checkbox-group">
+        <label class="cb-item"><input type="checkbox" class="proj-all-${amId}" onchange="selectAllProjs('${amId}')"> ✅ All Projects</label>
+        ${cfg.projects.map(p=>`<label class="cb-item"><input type="checkbox" class="proj-${amId}" value="${p}"> ${p}</label>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function selectAllProjs(amId) {
+  const allChecked = document.querySelector(`.proj-all-${amId}`).checked;
+  document.querySelectorAll(`.proj-${amId}`).forEach(cb => cb.checked = allChecked);
+}
+
+async function submitTask(e) {
+  e.preventDefault();
+  const btn = document.getElementById('f-submit-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Saving...';
+
+  const freq   = document.getElementById('f-freq').value;
+  const baseFreq = freq.startsWith('daily') ? 'daily' : freq;
+  const day = freq.startsWith('daily-') ? freq.split('daily-')[1].charAt(0).toUpperCase()+freq.split('daily-')[1].slice(1)
+             : (freq==='weekly'||freq==='biweekly') ? document.getElementById('f-day').value : 'Every Day';
+
+  const selectedAMs = [...document.querySelectorAll('#f-ams input[type="checkbox"]:not(#f-all-ams):checked')].map(cb=>cb.value);
+  if (!selectedAMs.length) { toast('Select at least one AM', 'error'); btn.disabled=false; btn.innerHTML='Allocate Task'; return; }
+
+  const assignedToProjects = {};
+  selectedAMs.forEach(amId => {
+    const projs = [...document.querySelectorAll(`.proj-${amId}:checked`)].map(cb=>cb.value);
+    assignedToProjects[amId] = projs.length > 0 ? projs : AM_CONFIG[amId].projects; // default: all projects
+  });
+
+  const template = {
+    name:             document.getElementById('f-name').value.trim(),
+    detail:           document.getElementById('f-detail').value.trim(),
+    category:         document.getElementById('f-cat').value,
+    priority:         document.getElementById('f-prio').value,
+    frequency:        baseFreq,
+    day:              day,
+    due:              document.getElementById('f-due').value.trim(),
+    assignedToAMs:    selectedAMs,
+    assignedToProjects,
+    active:           true,
+    createdBy:        currentUser.uid,
+    createdAt:        firebase.firestore.FieldValue.serverTimestamp(),
+  };
+
+  try {
+    const docRef = await db.collection('taskTemplates').add(template);
+    template.id = docRef.id;
+    allTemplates.push(template);
+
+    // Force regeneration of instances for selected AMs
+    const startNow = document.getElementById('f-start').value === 'now';
+    if (startNow) {
+      for (const amId of selectedAMs) {
+        const projects = assignedToProjects[amId];
+        // Remove period init markers so instances get created fresh
+        const dayK=todayStr(), wk=weekKey(), bwk=biWeekKey(), moK=monthKey();
+        const batch = db.batch();
+        const initRef = db.collection('periodInit');
+        if (baseFreq==='daily')    batch.delete(initRef.doc(`${amId}-${dayK}`));
+        if (baseFreq==='weekly')   batch.delete(initRef.doc(`${amId}-${wk}`));
+        if (baseFreq==='biweekly') batch.delete(initRef.doc(`${amId}-${bwk}`));
+        if (baseFreq==='monthly')  batch.delete(initRef.doc(`${amId}-${moK}`));
+        await batch.commit();
+        // Create instances immediately
+        await ensureInstances(amId, projects, [template]);
+      }
+    }
+
+    toast(`✅ Task "${template.name}" allocated to ${selectedAMs.map(a=>AM_CONFIG[a].name).join(', ')}`, 'success');
+    resetForm();
+  } catch(err) {
+    toast('Error: ' + err.message, 'error');
+  }
+  btn.disabled=false; btn.innerHTML='Allocate Task';
+}
+
+function resetForm() {
+  document.getElementById('allocate-form').reset();
+  document.getElementById('f-day-row').style.display='none';
+  document.getElementById('f-due-row').style.display='none';
+  document.getElementById('f-projects-row').style.display='none';
+}
+
+// ================================================================
+// 10. AM MODULE
+// ================================================================
+async function initAM() {
+  document.getElementById('am-app').style.display = 'flex';
+  const cfg = AM_CONFIG[currentAmId];
+  document.getElementById('am-display-name').textContent  = cfg.name;
+  document.getElementById('am-display-email').textContent = cfg.email;
+
+  // Load templates and generate instances
+  const snap = await db.collection('taskTemplates')
+    .where('assignedToAMs','array-contains',currentAmId)
+    .where('active','==',true).get();
+  const templates = snap.docs.map(d=>({id:d.id,...d.data()}));
+
+  await ensureInstances(currentAmId, cfg.projects, templates);
+  subscribeAMInstances();
+  populateKBFilter();
+  populateMTProjFilter();
+}
+
+function subscribeAMInstances() {
+  const dayK=todayStr(), wk=weekKey(), bwk=biWeekKey(), moK=monthKey();
+  unsubListeners.forEach(fn=>fn());
+  const unsub = db.collection('taskInstances')
+    .where('amId','==',currentAmId)
+    .where('periodKey','in',[dayK, wk, bwk, moK])
+    .onSnapshot(snap => {
+      myInstances = snap.docs.map(d=>({id:d.id,...d.data()}));
+      renderAMToday();
+      const activeTab = document.querySelector('.am-tab.active')?.textContent.trim();
+      if (activeTab?.includes('My Tasks'))  renderMyTasks();
+      if (activeTab?.includes('Project'))   renderProjects();
+      if (activeTab?.includes('Kanban'))    renderKanban();
+    });
+  unsubListeners.push(unsub);
+}
+
+async function updateInstanceStatus(instanceId, newStatus) {
+  try {
+    await db.collection('taskInstances').doc(instanceId).update({
+      status: newStatus,
+      updatedBy: currentUser.uid,
+      completedAt: newStatus==='Completed' ? firebase.firestore.FieldValue.serverTimestamp() : null,
+    });
+  } catch(e) { toast('Update failed: '+e.message,'error'); }
+}
+
+// ── Today View ──
+function renderAMToday() {
+  const now = new Date();
+  const dn  = dayName();
+  const cfg = AM_CONFIG[currentAmId];
+  document.getElementById('am-greeting').textContent = `Good ${now.getHours()<12?'morning':now.getHours()<17?'afternoon':'evening'}, ${cfg.name.split(' ')[0]}! 👋`;
+  document.getElementById('am-date-sub').textContent  = `${dn}, ${now.toLocaleDateString('en-IN',{day:'2-digit',month:'long',year:'numeric'})} · Week ${getWeekNum(now)}`;
+
+  // Deadline alerts
+  const d = now.getDate();
+  let alertsHtml = '';
+  if (d>=24&&d<=26) alertsHtml += `<div class="alert alert-warning">⚠️ Content Calendar due by 26th!</div>`;
+  if (d>=2&&d<=4)   alertsHtml += `<div class="alert alert-danger">🚨 Monthly Report due by 4th!</div>`;
+  document.getElementById('am-today-alerts').innerHTML = alertsHtml;
+
+  // Stats
+  const todayInsts = myInstances.filter(t => t.periodKey === todayStr() || t.day === dn || t.day === 'Every Day');
+  const done  = todayInsts.filter(t=>t.status==='Completed').length;
+  const total = todayInsts.length;
+  const overdue = myInstances.filter(t=>t.status==='Overdue').length;
+  document.getElementById('am-today-stats').innerHTML = `
+    <div class="stat-box" style="border-top-color:var(--dark-blue)"><div class="n" style="color:var(--dark-blue)">${total}</div><div class="l">Today's Tasks</div></div>
+    <div class="stat-box" style="border-top-color:var(--green)"><div class="n" style="color:var(--green)">${done}</div><div class="l">Completed</div></div>
+    <div class="stat-box" style="border-top-color:var(--orange)"><div class="n" style="color:var(--orange)">${total-done}</div><div class="l">Remaining</div></div>
+    ${overdue?`<div class="stat-box" style="border-top-color:var(--red)"><div class="n" style="color:var(--red)">${overdue}</div><div class="l">Overdue</div></div>`:''}
+    <div class="stat-box" style="border-top-color:var(--mid-blue)"><div class="n" style="color:var(--mid-blue)">${total?Math.round(done/total*100):0}%</div><div class="l">Today Done</div></div>
+  `;
+
+  const list = document.getElementById('am-today-list');
+  if (todayInsts.length === 0) { list.innerHTML=`<div class="empty-state"><div class="icon">✅</div><p>No tasks for today — all clear!</p></div>`; return; }
+  list.innerHTML = todayInsts.map(t => taskRowHTML(t)).join('');
+}
+
+function taskRowHTML(t) {
+  const catBg = {'Technical':'#BDD5EA','On-Page':'#D5F5E3','Off-Page':'#EBD5F5','Analytics':'#FDEBD0','Client':'#FADBD8','Research':'#D1F2EB','AI-SEO':'#D6EAF8','Reporting':'#FEF9E7'};
+  const borderColor = catBg[t.category] || '#BDD5EA';
+  const opts = STATUS_VALS.map(s=>`<option value="${s}"${t.status===s?' selected':''}>${s}</option>`).join('');
+  return `<div class="task-row" style="border-left-color:${borderColor}">
+    <div class="task-row-main">
+      <div class="task-row-name">${t.name}</div>
+      <div class="task-row-detail">${t.detail||''}</div>
+      <div class="task-row-meta">
+        <span class="badge ${CAT_CLASS[t.category]||''}">${t.category}</span>
+        <span class="freq-pill fp-${t.frequency}">${t.frequency}</span>
+        <span style="font-size:10px;color:var(--muted)">${t.project}</span>
+        ${t.day?`<span class="day-pill dp-${t.day.replace(' ','')}">${t.day}</span>`:''}
+      </div>
+    </div>
+    <select class="status-sel ${STATUS_CLASS[t.status]||''}" onchange="onStatusChange(this,'${t.id}')">
+      ${opts}
+    </select>
+  </div>`;
+}
+
+function onStatusChange(sel, id) {
+  sel.className = `status-sel ${STATUS_CLASS[sel.value]||''}`;
+  updateInstanceStatus(id, sel.value);
+}
+
+// ── My Tasks View ──
+function renderMyTasks() {
+  const search = document.getElementById('mt-search')?.value.toLowerCase()||'';
+  const freqF  = document.getElementById('mt-freq-filter')?.value||'';
+  const activeProjFilters = [...(document.querySelectorAll('.mt-proj-chip.active')||[])].map(c=>c.dataset.proj);
+
+  let inst = myInstances.filter(t =>
+    (!search || t.name.toLowerCase().includes(search) || (t.detail||'').toLowerCase().includes(search)) &&
+    (!freqF  || t.frequency === freqF) &&
+    (!activeProjFilters.length || activeProjFilters.includes(t.project))
+  );
+
+  const groups = {daily:[],weekly:[],biweekly:[],monthly:[]};
+  inst.forEach(t => { if(groups[t.frequency]) groups[t.frequency].push(t); else groups.daily.push(t); });
+
+  const freqMeta = {
+    daily:    {label:'🗓️ Daily Tasks',    color:'var(--dark-blue)', dayLabel:t=>t.day||'Every Day'},
+    weekly:   {label:'📆 Weekly Tasks',   color:'var(--green)',     dayLabel:t=>t.day||''},
+    biweekly: {label:'🔁 Biweekly Tasks', color:'var(--purple)',    dayLabel:t=>t.day||''},
+    monthly:  {label:'📅 Monthly Tasks',  color:'var(--orange)',    dayLabel:t=>t.due||''},
+  };
+
+  let html = '';
+  Object.entries(freqMeta).forEach(([freq, meta]) => {
+    const tasks = groups[freq];
+    if (!tasks.length) return;
+    html += `<div style="margin-bottom:20px">
+      <div style="background:${meta.color};color:#fff;padding:8px 14px;border-radius:8px;font-weight:700;font-size:13px;margin-bottom:8px">${meta.label} (${tasks.length})</div>
+      ${tasks.map(t => taskRowHTML(t)).join('')}
+    </div>`;
+  });
+
+  document.getElementById('am-mytasks-list').innerHTML = html || `<div class="empty-state"><div class="icon">🔍</div><p>No tasks match your filter.</p></div>`;
+}
+
+function populateMTProjFilter() {
+  const cfg = AM_CONFIG[currentAmId];
+  const el  = document.getElementById('mt-proj-filters');
+  if (!el) return;
+  el.innerHTML = cfg.projects.map(p=>
+    `<span class="filter-chip mt-proj-chip" data-proj="${p}" onclick="toggleProjFilter(this)">${p}</span>`
+  ).join('');
+}
+function toggleProjFilter(el) { el.classList.toggle('active'); renderMyTasks(); }
+
+// ── By Project View ──
+function renderProjects() {
+  const cfg  = AM_CONFIG[currentAmId];
+  const tabs = document.getElementById('am-proj-tabs');
+  const cont = document.getElementById('am-proj-content');
+  const activeProjTab = document.querySelector('.proj-tab.active')?.dataset.proj || cfg.projects[0];
+
+  tabs.innerHTML = cfg.projects.map(p=>
+    `<span class="proj-tab${p===activeProjTab?' active':''}" data-proj="${p}" onclick="selectProjTab(this,'${p}')">${p}</span>`
+  ).join('');
+
+  renderProjContent(activeProjTab, cont);
+}
+
+function selectProjTab(el, proj) {
+  document.querySelectorAll('.proj-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  renderProjContent(proj, document.getElementById('am-proj-content'));
+}
+
+function renderProjContent(proj, cont) {
+  const tasks = myInstances.filter(t=>t.project===proj);
+  const done  = tasks.filter(t=>t.status==='Completed').length;
+  const pct   = tasks.length ? Math.round(done/tasks.length*100) : 0;
+
+  const groups = {daily:[],weekly:[],biweekly:[],monthly:[]};
+  tasks.forEach(t=>{ if(groups[t.frequency]) groups[t.frequency].push(t); });
+
+  let html = `
+    <div class="proj-progress">
+      <strong style="font-size:14px">${proj}</strong>
+      <div class="proj-bar"><div class="proj-bar-fill" style="width:${pct}%"></div></div>
+      <span style="font-size:12px;font-weight:700;color:var(--green)">${pct}%</span>
+      <span style="font-size:11px;color:var(--muted)">${done}/${tasks.length} done</span>
+    </div>`;
+
+  const freqLabels = {daily:'🗓️ Daily',weekly:'📆 Weekly',biweekly:'🔁 Biweekly',monthly:'📅 Monthly'};
+  Object.entries(groups).forEach(([freq,arr])=>{
+    if (!arr.length) return;
+    html += `<div class="card" style="margin-bottom:12px">
+      <div class="card-title">${freqLabels[freq]} (${arr.length})</div>
+      ${arr.map(t=>taskRowHTML(t)).join('')}
+    </div>`;
+  });
+
+  cont.innerHTML = html || `<div class="empty-state"><div class="icon">📋</div><p>No tasks for ${proj} yet.</p></div>`;
+}
+
+// ── Kanban View ──
+function populateKBFilter() {
+  const cfg = AM_CONFIG[currentAmId];
+  const sel = document.getElementById('kb-proj-filter');
+  if (!sel) return;
+  cfg.projects.forEach(p => { const o=document.createElement('option'); o.value=p; o.textContent=p; sel.appendChild(o); });
+}
+
+function renderKanban() {
+  const projF = document.getElementById('kb-proj-filter')?.value||'';
+  const freqF = document.getElementById('kb-freq-filter')?.value||'';
+  let inst = myInstances.filter(t =>
+    (!projF || t.project===projF) &&
+    (!freqF || t.frequency===freqF)
+  );
+
+  const board = document.getElementById('kanban-board');
+  board.innerHTML = KANBAN_COLS.map(col => {
+    const cards = inst.filter(t=>col.statuses.includes(t.status));
+    return `<div class="kanban-col" id="kb-col-${col.id}"
+        ondragover="event.preventDefault();this.classList.add('kanban-over')"
+        ondragleave="this.classList.remove('kanban-over')"
+        ondrop="onKanbanDrop(event,'${col.statuses[0]}')">
+      <div class="kanban-col-header">
+        <span style="color:${col.color}">${col.label}</span>
+        <span class="kanban-count" style="color:${col.color}">${cards.length}</span>
+      </div>
+      ${cards.map(t=>kanbanCard(t)).join('')}
+    </div>`;
+  }).join('');
+}
+
+function kanbanCard(t) {
+  return `<div class="kanban-card" draggable="true" id="kc-${t.id}"
+      ondragstart="onKanbanDragStart(event,'${t.id}')"
+      ondragend="document.querySelectorAll('.kanban-over').forEach(c=>c.classList.remove('kanban-over'))"
+      onclick="openTaskDetail('${t.id}')">
+    <div class="kc-project">${t.project}</div>
+    <div class="kc-name">${t.name}</div>
+    <div class="kc-meta">
+      <span class="badge ${CAT_CLASS[t.category]||''}" style="font-size:9px">${t.category}</span>
+      <span class="freq-pill fp-${t.frequency}" style="font-size:9px">${t.frequency}</span>
+      ${t.day?`<span class="day-pill dp-${t.day.replace(' ','')}" style="font-size:9px">${t.day}</span>`:''}
+    </div>
+  </div>`;
+}
+
+let draggedId = null;
+function onKanbanDragStart(e, id) { draggedId=id; document.getElementById('kc-'+id).classList.add('dragging'); }
+function onKanbanDrop(e, newStatus) {
+  e.currentTarget.classList.remove('kanban-over');
+  if (!draggedId) return;
+  updateInstanceStatus(draggedId, newStatus);
+  draggedId = null;
+}
+
+// ── Task Detail Modal ──
+function openTaskDetail(instanceId) {
+  const t = myInstances.find(x=>x.id===instanceId);
+  if (!t) return;
+  document.getElementById('modal-task-name').textContent = t.name;
+  const opts = STATUS_VALS.map(s=>`<option${t.status===s?' selected':''}>${s}</option>`).join('');
+  document.getElementById('modal-body').innerHTML = `
+    <div style="margin-bottom:14px;font-size:13px;color:var(--muted)">${t.detail||'No details provided.'}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;font-size:12px">
+      <div><strong>Project:</strong> ${t.project}</div>
+      <div><strong>Category:</strong> <span class="badge ${CAT_CLASS[t.category]||''}">${t.category}</span></div>
+      <div><strong>Frequency:</strong> <span class="freq-pill fp-${t.frequency}">${t.frequency}</span></div>
+      <div><strong>Day/Due:</strong> ${t.day||t.due||'—'}</div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Status</label>
+      <select class="form-select" id="modal-status" onchange="onModalStatusChange('${t.id}')">${opts}</select>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Notes / Evidence URL</label>
+      <textarea class="form-textarea" id="modal-notes" placeholder="Add notes, screenshot URL, or evidence link...">${t.notes||''}</textarea>
+    </div>
+    <button class="btn btn-success" onclick="saveModalNotes('${t.id}')">💾 Save Notes</button>
+  `;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function onModalStatusChange(id) {
+  const s = document.getElementById('modal-status').value;
+  updateInstanceStatus(id, s);
+}
+async function saveModalNotes(id) {
+  const notes = document.getElementById('modal-notes').value;
+  await db.collection('taskInstances').doc(id).update({notes, updatedBy:currentUser.uid});
+  toast('Notes saved','success');
+  closeModal();
+}
+function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
+
+// ── Tab Navigation ──
+function amTab(tab, btn) {
+  document.querySelectorAll('#am-today,#am-mytasks,#am-projects,#am-kanban').forEach(el=>el.style.display='none');
+  document.querySelectorAll('.am-tab').forEach(b=>b.classList.remove('active'));
+  document.getElementById('am-'+tab).style.display='block';
+  btn.classList.add('active');
+  if (tab==='mytasks')  renderMyTasks();
+  if (tab==='projects') renderProjects();
+  if (tab==='kanban')   renderKanban();
+}
+
+// ================================================================
+// 11. DEFAULT TASK SEEDING (run once by AVP)
+// ================================================================
+async function seedDefaultTasks() {
+  toast('Initializing default SEO tasks...', 'info');
+  const defaults = [
+    // Daily
+    {name:"Blog Publish Check",       detail:"AM audits SEO exec's blogs: keywords, anchor tags, UI/UX, content visibility", category:"On-Page",  frequency:"daily", day:"Every Day", priority:"high"},
+    {name:"Keywords Ranking Check",   detail:"SEO Exec checks rankings + AM cross-audit verification",                       category:"Analytics",frequency:"daily", day:"Monday",   priority:"high"},
+    {name:"Backlink Audit",           detail:"Backlink sheet updated + bad/toxic links flagged (spam >30 or DA <10)",         category:"Off-Page", frequency:"daily", day:"Tuesday",  priority:"high"},
+    {name:"Lead Sheet Update",        detail:"Lead sheet updated with timestamp + lead count logged",                         category:"Analytics",frequency:"daily", day:"Wednesday",priority:"high"},
+    {name:"Client Insights",          detail:"Weekly SEO update sent to client via WhatsApp/email + screenshot logged",       category:"Client",   frequency:"daily", day:"Thursday", priority:"high"},
+    {name:"GSC Error Check",          detail:"Error count BEFORE and AFTER fixes logged in master sheet",                     category:"Technical",frequency:"daily", day:"Friday",   priority:"high"},
+    // Weekly - Monday
+    {name:"AI Visibility Check",      detail:"Test brand/product in ChatGPT, Perplexity, Claude & Google AI Overview",       category:"AI-SEO",   frequency:"weekly",day:"Monday",   priority:"medium"},
+    {name:"Core Web Vitals Review",   detail:"Check LCP (<2.5s), INP (<200ms), CLS (<0.1) via PageSpeed / GSC",             category:"Technical",frequency:"weekly",day:"Monday",   priority:"high"},
+    {name:"E-E-A-T Content Audit",    detail:"Review Experience, Expertise, Authority, Trust signals — author bio, citations", category:"On-Page", frequency:"weekly",day:"Monday",   priority:"medium"},
+    // Weekly - Tuesday
+    {name:"Page Speed Check",         detail:"Desktop & mobile speed test via PageSpeed Insights / GTmetrix",                category:"Technical",frequency:"weekly",day:"Tuesday",  priority:"high"},
+    {name:"Broken Links Audit",       detail:"Identify and fix all 404 errors and broken internal/external links",            category:"Technical",frequency:"weekly",day:"Tuesday",  priority:"high"},
+    // Weekly - Wednesday
+    {name:"Internal Link Review",     detail:"Review and strengthen internal linking — min 3-5 links per key page",          category:"On-Page",  frequency:"weekly",day:"Wednesday",priority:"medium"},
+    {name:"Content Review/Publish",   detail:"Update existing content or publish new blog post/page (min 600 words)",         category:"On-Page",  frequency:"weekly",day:"Wednesday",priority:"high"},
+    {name:"Meta Tags Review",         detail:"Audit title tags (50-60 chars) & meta descriptions (150-160 chars)",            category:"On-Page",  frequency:"weekly",day:"Wednesday",priority:"high"},
+    // Weekly - Thursday
+    {name:"GMB Activity Update",      detail:"Post GMB updates, respond to reviews, check insights & Q&A",                   category:"Off-Page", frequency:"weekly",day:"Thursday", priority:"medium"},
+    {name:"New Backlinks Creation",   detail:"Create 5+ quality backlinks (DA 30+, 80% dofollow)",                          category:"Off-Page", frequency:"weekly",day:"Thursday", priority:"high"},
+    {name:"Social Signals Update",    detail:"Social bookmarking, Q&A profiles, image/video sharing activities",             category:"Off-Page", frequency:"weekly",day:"Thursday", priority:"medium"},
+    // Weekly - Friday
+    {name:"GSC Performance Review",   detail:"Check impressions, clicks, CTR, average position in GSC",                      category:"Analytics",frequency:"weekly",day:"Friday",   priority:"high"},
+    {name:"GA4 Traffic Review",       detail:"Review sessions, users, bounce rate, conversions in GA4",                      category:"Analytics",frequency:"weekly",day:"Friday",   priority:"high"},
+    {name:"AI SEO Optimization",      detail:"Optimize for AI search — FAQ schema, conversational queries, PAA, direct answers", category:"AI-SEO",frequency:"weekly",day:"Friday",  priority:"medium"},
+    // Biweekly
+    {name:"Competitor Keyword Analysis",detail:"Analyze top competitor rankings — identify keyword gaps",                   category:"Research", frequency:"biweekly",day:"Monday",  priority:"medium"},
+    {name:"Content Gap Analysis",     detail:"Find missing content topics vs top 3 competitors",                             category:"Research", frequency:"biweekly",day:"Tuesday", priority:"medium"},
+    {name:"Schema Markup Validation", detail:"Validate ALL structured data via Google Rich Results Test",                    category:"Technical",frequency:"biweekly",day:"Tuesday", priority:"high"},
+    {name:"Image Optimization Check", detail:"Compress images, verify alt tags, check WebP adoption",                       category:"On-Page",  frequency:"biweekly",day:"Wednesday",priority:"medium"},
+    {name:"Toxic Backlink Audit",     detail:"Identify harmful backlinks via Ahrefs/SEMrush — update disavow file",         category:"Off-Page", frequency:"biweekly",day:"Thursday",priority:"high"},
+    {name:"Mobile UX Review",         detail:"Test mobile responsiveness, usability, CTA visibility",                       category:"Technical",frequency:"biweekly",day:"Thursday",priority:"medium"},
+    {name:"Featured Snippet Research",detail:"Identify PAA, definition & list snippet opportunities",                       category:"Research", frequency:"biweekly",day:"Friday",   priority:"medium"},
+    // Monthly
+    {name:"Full Technical SEO Audit", detail:"Comprehensive site audit via Screaming Frog / SEMrush",                       category:"Technical",frequency:"monthly",due:"1st Monday",   priority:"high"},
+    {name:"Full Backlink Profile Audit",detail:"Complete backlink analysis via Ahrefs/SEMrush",                             category:"Off-Page", frequency:"monthly",due:"1st Tuesday",  priority:"high"},
+    {name:"KPI Review & Client Meeting",detail:"Traffic %, rankings, leads, bounce rate — present to client",               category:"Client",   frequency:"monthly",due:"1st Wednesday",priority:"high"},
+    {name:"Keyword Research & Refresh",detail:"Update target keywords, add long-tail & AI-search opportunities",            category:"Research", frequency:"monthly",due:"2nd Monday",   priority:"medium"},
+    {name:"Content Calendar Planning",detail:"Plan NEXT MONTH content schedule — MUST complete by 26th",                   category:"On-Page",  frequency:"monthly",due:"By 26th ⚠️",  priority:"high"},
+    {name:"Monthly Performance Report",detail:"PDF report sent to each client + acknowledgment logged",                     category:"Reporting",frequency:"monthly",due:"4th of Month", priority:"high"},
+    {name:"Disavow File Review",       detail:"Review & update Google disavow file — add new toxic domains",                category:"Off-Page", frequency:"monthly",due:"Last Friday",  priority:"medium"},
+  ];
+
+  const allAMs = ['birbal','ajay','ambuj'];
+  const batch = db.batch();
+  defaults.forEach(t => {
+    const assignedToProjects = {};
+    allAMs.forEach(amId => { assignedToProjects[amId] = AM_CONFIG[amId].projects; });
+    const ref = db.collection('taskTemplates').doc();
+    batch.set(ref, {
+      ...t, assignedToAMs: allAMs, assignedToProjects,
+      active: true, createdBy: currentUser.uid,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  });
+  await batch.commit();
+  // Reload
+  const snap = await db.collection('taskTemplates').where('active','==',true).get();
+  allTemplates = snap.docs.map(d=>({id:d.id,...d.data()}));
+  toast(`✅ ${defaults.length} default tasks loaded!`, 'success');
+  renderAVPOverview();
+}
+
+// ================================================================
+// 12. TOAST
+// ================================================================
+function toast(msg, type='') {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(()=>t.remove(), 4000);
+}
+</script>
+
+
+</body>
+</html>
