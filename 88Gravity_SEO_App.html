@@ -711,7 +711,7 @@ tr:hover td{background:var(--pale-blue)}
 
 
         <div id="avp-tasks" class="avp-view" style="display:none">
-          <div class="page-header"><h1>📋 All Tasks</h1><p>View and manage all task templates assigned to your team.</p></div>
+          <div class="page-header"><h1>📋 All Tasks</h1><p>Live view of actual tasks assigned to each AM this period.</p></div>
           <div class="filter-bar">
             <input class="search-input" id="tasks-search" placeholder="🔍 Search tasks..." oninput="filterTasksList()">
             <select class="form-select" id="tasks-filter-am" style="width:160px" onchange="filterTasksList()">
@@ -723,11 +723,15 @@ tr:hover td{background:var(--pale-blue)}
               <option value="daily">Daily</option><option value="weekly">Weekly</option>
               <option value="biweekly">Biweekly</option><option value="monthly">Monthly</option>
             </select>
+            <select class="form-select" id="tasks-filter-status" style="width:150px" onchange="filterTasksList()">
+              <option value="">All Statuses</option>
+              <option value="Not Started">Not Started</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Completed">Completed</option>
+              <option value="Overdue">Overdue</option>
+            </select>
           </div>
-          <div class="table-wrap">
-            <table><thead><tr><th>Task Name</th><th>Category</th><th>Frequency</th><th>Day/Due</th><th>AMs</th><th>Projects</th><th>Actions</th></tr></thead>
-            <tbody id="tasks-table-body"></tbody></table>
-          </div>
+          <div id="tasks-instances-body"></div>
         </div>
 
         <!-- Per-AM boards (AVP view) -->
@@ -1171,10 +1175,8 @@ async function refreshAVPOverviewData() {
   renderAVPOverview();
 }
 
-// Fresh Firestore fetch for All Tasks tab
-async function refreshAndRenderAllTasks() {
-  const snap = await db.collection('taskTemplates').where('active','==',true).get();
-  allTemplates = snap.docs.map(d=>({id:d.id,...d.data()}));
+// Fresh render for All Tasks tab (uses live allInstances already subscribed)
+function refreshAndRenderAllTasks() {
   renderTasksList();
 }
 
@@ -1407,28 +1409,66 @@ function toggleProjDetail(amId, projIdx) {
 }
 
 function renderTasksList() {
-  const search  = document.getElementById('tasks-search').value.toLowerCase();
-  const amFilt  = document.getElementById('tasks-filter-am').value;
-  const freqFilt= document.getElementById('tasks-filter-freq').value;
-  const tbody   = document.getElementById('tasks-table-body');
-  let filtered  = allTemplates.filter(t =>
-    (!search || t.name.toLowerCase().includes(search) || (t.detail||'').toLowerCase().includes(search)) &&
-    (!amFilt  || (t.assignedToAMs||[]).includes(amFilt)) &&
-    (!freqFilt|| t.frequency === freqFilt)
+  const search     = (document.getElementById('tasks-search')?.value||'').toLowerCase();
+  const amFilt     = document.getElementById('tasks-filter-am')?.value||'';
+  const freqFilt   = document.getElementById('tasks-filter-freq')?.value||'';
+  const statusFilt = document.getElementById('tasks-filter-status')?.value||'';
+  const container  = document.getElementById('tasks-instances-body');
+
+  // Gather all instances across AMs
+  const amIds = amFilt ? [amFilt] : ['birbal','ajay','ambuj'];
+  let allInst = amIds.flatMap(amId =>
+    (allInstances[amId]||[]).map(t=>({...t, amId}))
+  ).filter(t =>
+    (!search     || t.name.toLowerCase().includes(search) || (t.detail||'').toLowerCase().includes(search)) &&
+    (!freqFilt   || t.frequency === freqFilt) &&
+    (!statusFilt || t.status === statusFilt)
   );
-  tbody.innerHTML = filtered.map(t => {
-    const ams = (t.assignedToAMs||[]).map(a=>AM_CONFIG[a]?.name||a).join(', ');
-    const projCount = Object.values(t.assignedToProjects||{}).flat().length;
-    return `<tr>
-      <td><strong>${t.name}</strong>${t.detail?`<div style="font-size:10px;color:var(--muted)">${t.detail.substring(0,50)}...</div>`:''}</td>
-      <td><span class="badge ${CAT_CLASS[t.category]||''}">${t.category}</span></td>
-      <td><span class="freq-pill fp-${t.frequency}">${t.frequency}</span></td>
-      <td style="font-size:11px">${t.day||t.due||'—'}</td>
-      <td style="font-size:12px">${ams||'—'}</td>
-      <td style="font-size:12px">${projCount} projects</td>
-      <td style="white-space:nowrap"><button class="btn btn-sm btn-warning" onclick="openEditTemplate('${t.id}')" style="margin-right:4px">✏️</button><button class="btn btn-sm btn-danger" onclick="deleteTemplate('${t.id}')">🗑</button></td>
-    </tr>`;
-  }).join('') || `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">No tasks found</td></tr>`;
+
+  if (!allInst.length) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">📋</div><p>No tasks found for current filters.</p></div>`;
+    return;
+  }
+
+  // Group by AM
+  const byAM = {};
+  allInst.forEach(t => { (byAM[t.amId] = byAM[t.amId]||[]).push(t); });
+
+  let html = '';
+  Object.entries(byAM).forEach(([amId, tasks]) => {
+    const cfg  = AM_CONFIG[amId];
+    const done = tasks.filter(t=>t.status==='Completed').length;
+    const pct  = tasks.length ? Math.round(done/tasks.length*100) : 0;
+    const barColor = pct>=80?'var(--green)':pct>=50?'var(--yellow)':'var(--orange)';
+
+    html += `
+    <div class="card" style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap">
+        <div style="font-size:15px;font-weight:700;color:var(--dark-blue)">👤 ${cfg.name}</div>
+        <span style="font-size:11px;color:var(--muted)">${cfg.email}</span>
+        <span style="font-size:11px;font-weight:600;color:var(--mid-blue)">${tasks.length} tasks</span>
+        <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+          <div class="proj-bar" style="width:100px"><div class="proj-bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
+          <strong style="font-size:13px;color:${barColor}">${pct}% done</strong>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table><thead><tr><th>Task Name</th><th>Project</th><th>Category</th><th>Freq</th><th>Day/Due</th><th>Status</th></tr></thead>
+        <tbody>
+          ${tasks.map(t=>`<tr>
+            <td><strong style="font-size:12px">${t.name}</strong>${t.detail?`<div style="font-size:10px;color:var(--muted)">${t.detail.substring(0,60)}${t.detail.length>60?'...':''}</div>`:''}</td>
+            <td style="font-size:12px">📁 ${t.project||'—'}</td>
+            <td><span class="badge ${CAT_CLASS[t.category]||''}">${t.category||'—'}</span></td>
+            <td><span class="freq-pill fp-${t.frequency}">${t.frequency}</span></td>
+            <td style="font-size:11px;white-space:nowrap">${t.day||t.due||'—'}</td>
+            <td><span class="badge ${STATUS_CLASS[t.status]||''}">${t.status}</span></td>
+          </tr>`).join('')}
+        </tbody></table>
+      </div>
+    </div>`;
+  });
+
+  container.innerHTML = html;
 }
 
 function filterTasksList() { renderTasksList(); }
