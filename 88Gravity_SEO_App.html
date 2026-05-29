@@ -1107,7 +1107,7 @@ function isMonthlyDayToday(due) {
       const nw=new Date(now); nw.setDate(now.getDate()+7);
       return nw.getMonth()!==now.getMonth();
     }
-    const occ={1st:1,2nd:2,3rd:3,4th:4}[m[1].toLowerCase()]||1;
+    const occ={"1st":1,"2nd":2,"3rd":3,"4th":4}[m[1].toLowerCase()]||1;
     return Math.ceil(now.getDate()/7)===occ;
   }
   return true; // unknown legacy format → always show
@@ -1119,7 +1119,7 @@ function isBiweeklyDayToday(day) {
   if (m) {
     const tgt=m[2].charAt(0).toUpperCase()+m[2].slice(1).toLowerCase();
     if (dayName()!==tgt) return false;
-    const occ={1st:1,2nd:2,3rd:3,4th:4}[m[1].toLowerCase()]||1;
+    const occ={"1st":1,"2nd":2,"3rd":3,"4th":4}[m[1].toLowerCase()]||1;
     return Math.ceil(new Date().getDate()/7)===occ;
   }
   return dayName()===day; // legacy: plain day name
