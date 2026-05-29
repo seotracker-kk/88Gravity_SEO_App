@@ -1587,15 +1587,19 @@ function renderTasksList() {
         </div>
       </div>
       <div class="table-wrap">
-        <table><thead><tr><th>Task Name</th><th>Project</th><th>Category</th><th>Freq</th><th>Day/Due</th><th>Status</th></tr></thead>
+        <table><thead><tr><th>Task Name</th><th>Project</th><th>Category</th><th>Freq</th><th>Day/Due</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody>
           ${tasks.map(t=>`<tr>
             <td><strong style="font-size:12px">${t.name}</strong>${t.detail?`<div style="font-size:10px;color:var(--muted)">${t.detail.substring(0,60)}${t.detail.length>60?'...':''}</div>`:''}</td>
             <td style="font-size:12px">📁 ${t.project||'—'}</td>
             <td><span class="badge ${CAT_CLASS[t.category]||''}">${t.category||'—'}</span></td>
             <td><span class="freq-pill fp-${t.frequency}">${t.frequency}</span></td>
-            <td style="font-size:11px;white-space:nowrap">${t.day||t.due||'—'}</td>
+            <td style="font-size:11px;white-space:nowrap">${fmtScheduleLabel(t)||t.day||t.due||'—'}</td>
             <td><span class="badge ${STATUS_CLASS[t.status]||''}">${t.status}</span></td>
+            <td style="white-space:nowrap">
+              <button title="Edit" style="background:none;border:none;font-size:14px;cursor:pointer;padding:2px 4px" onclick="openTaskDetail('${t.id}')">✏️</button>
+              <button title="Delete" style="background:none;border:none;font-size:14px;cursor:pointer;padding:2px 4px" onclick="deleteTaskInstance('${t.id}')">🗑️</button>
+            </td>
           </tr>`).join('')}
         </tbody></table>
       </div>
@@ -2816,60 +2820,68 @@ async function submitMapTask(e) {
   const btn=document.getElementById('map-submit-btn');
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Mapping...';
 
-  const taskId=document.getElementById('map-task-sel').value;
-  const task=taskLibrary.find(t=>t.id===taskId);
-  if (!task) { toast('Select a task first','error'); btn.disabled=false; btn.innerHTML='🔗 Map Task'; return; }
-
-  const selCbs=[...document.querySelectorAll('.map-proj-cb:checked')];
-  if (!selCbs.length) { toast('Select at least one project','error'); btn.disabled=false; btn.innerHTML='🔗 Map Task'; return; }
-
-  const freq=document.getElementById('map-freq').value;
-  const baseFreq=freq.startsWith('daily')?'daily':freq;
-  const day=freq.startsWith('daily-')
-    ? freq.split('daily-')[1].charAt(0).toUpperCase()+freq.split('daily-')[1].slice(1)
-    : freq==='weekly'   ? document.getElementById('map-day').value
-    : freq==='biweekly' ? ((document.getElementById('map-biw-occ')?.value||'1st+3rd')+'-'+(document.getElementById('map-biw-day')?.value||'Monday'))
-    : 'Every Day';
-
-  // Group by AM
-  const assignedToAMs=new Set();
-  const assignedToProjects={};
-  selCbs.forEach(cb => {
-    const proj=allProjects.find(p=>p.id===cb.value);
-    if (!proj) return;
-    assignedToAMs.add(proj.amId);
-    if (!assignedToProjects[proj.amId]) assignedToProjects[proj.amId]=[];
-    assignedToProjects[proj.amId].push(proj.name);
-  });
-
-  const template={
-    name:              task.name,
-    detail:            document.getElementById('map-detail').value.trim() || task.detail||'',
-    category:          task.category,
-    priority:          task.priority,
-    taskLibraryId:     taskId,
-    frequency:         baseFreq,
-    day,
-    due:               document.getElementById('map-due')?.value.trim()||'',
-    assignedToAMs:     [...assignedToAMs],
-    assignedToProjects,
-    active:            true,
-    createdBy:         currentUser.uid,
-    createdAt:         firebase.firestore.FieldValue.serverTimestamp(),
-  };
-
   try {
+    const taskId=document.getElementById('map-task-sel').value;
+    const task=taskLibrary.find(t=>t.id===taskId);
+    if (!task) { toast('Select a task first','error'); return; }
+
+    const selCbs=[...document.querySelectorAll('.map-proj-cb:checked')];
+    if (!selCbs.length) { toast('Select at least one project','error'); return; }
+
+    const freq=document.getElementById('map-freq').value;
+    if (!freq) { toast('Please select a frequency','error'); return; }
+    const baseFreq=freq.startsWith('daily')?'daily':freq;
+    const day=freq.startsWith('daily-')
+      ? freq.split('daily-')[1].charAt(0).toUpperCase()+freq.split('daily-')[1].slice(1)
+      : freq==='weekly'   ? (document.getElementById('map-day')?.value||'Monday')
+      : freq==='biweekly' ? ((document.getElementById('map-biw-occ')?.value||'1st+3rd')+'-'+(document.getElementById('map-biw-day')?.value||'Monday'))
+      : freq==='daily-everyday' ? 'Every Day'
+      : 'Every Day';
+    const due = freq==='monthly' ? (document.getElementById('map-due')?.value||'') : '';
+
+    // Group selected projects by AM
+    const assignedToAMs=new Set();
+    const assignedToProjects={};
+    selCbs.forEach(cb => {
+      const proj=allProjects.find(p=>p.id===cb.value);
+      if (!proj) return;
+      assignedToAMs.add(proj.amId);
+      if (!assignedToProjects[proj.amId]) assignedToProjects[proj.amId]=[];
+      assignedToProjects[proj.amId].push(proj.name);
+    });
+    if (!assignedToAMs.size) { toast('No valid projects selected','error'); return; }
+
+    const template={
+      name:              task.name,
+      detail:            (document.getElementById('map-detail')?.value||'').trim() || task.detail||'',
+      category:          task.category||'',
+      priority:          task.priority||'medium',
+      taskLibraryId:     taskId,
+      frequency:         baseFreq,
+      day,
+      due,
+      assignedToAMs:     [...assignedToAMs],
+      assignedToProjects,
+      active:            true,
+      createdBy:         currentUser.uid,
+      createdAt:         firebase.firestore.FieldValue.serverTimestamp(),
+    };
+
+    // Save template to Firestore
     const docRef=await db.collection('taskTemplates').add(template);
     template.id=docRef.id;
     allTemplates.push(template);
 
-    if (document.getElementById('map-start').value==='now') {
-      // Directly create instances — bypasses periodInit so they appear immediately
+    // Immediately create task instances if "now" is selected
+    if ((document.getElementById('map-start')?.value||'now')==='now') {
       const dayK=todayStr(), wk=weekKey(), moK=monthKey();
       for (const amId of [...assignedToAMs]) {
         const projs=assignedToProjects[amId];
-        // For daily: skip if today isn't the configured day
+        if (!projs||!projs.length) continue;
+        // For daily tasks only run on the correct day
         if (baseFreq==='daily' && day!=='Every Day' && day!==dayName()) continue;
+        // For weekly tasks only run on the correct day
+        if (baseFreq==='weekly' && day!==dayName()) continue;
         const periodKey = baseFreq==='daily'?dayK : baseFreq==='weekly'?wk : moK;
         const instBatch=db.batch();
         projs.forEach(projName=>{
@@ -2877,35 +2889,34 @@ async function submitMapTask(e) {
           instBatch.set(db.collection('taskInstances').doc(instId), {
             templateId:template.id, amId, project:projName, name:template.name,
             detail:template.detail||'', category:template.category||'',
-            frequency:baseFreq, day, due:template.due||'',
+            frequency:baseFreq, day, due,
             priority:template.priority||'medium',
             periodKey, calendarMonth:moK,
             status:'Not Started', notes:'', completedAt:null, updatedBy:null,
             createdAt:firebase.firestore.FieldValue.serverTimestamp(),
-          }, {merge:false});
+          });
         });
-        try { await instBatch.commit(); }
-        catch(e) { console.warn('Instance creation warning:', e.message); }
+        try {
+          await instBatch.commit();
+        } catch(batchErr) {
+          console.warn('Batch commit error for', amId, ':', batchErr.message);
+        }
       }
     }
 
-    const projNames=selCbs.map(cb=>cb.dataset.name).join(', ');
+    const projNames=selCbs.map(cb=>cb.dataset.name||cb.value).join(', ');
     toast('✅ "'+task.name+'" mapped to: '+projNames,'success');
     resetMapForm();
-    // Force-reload all instances from Firestore and refresh Overview + All Tasks immediately
-    const dayK2=todayStr(), wk2=weekKey(), bwk2=biWeekKey(), moK2=monthKey();
-    for (const aid of ['birbal','ajay','ambuj']) {
-      try {
-        const iSnap = await db.collection('taskInstances')
-          .where('amId','==',aid)
-          .where('periodKey','in',[dayK2, wk2, bwk2, moK2]).get();
-        allInstances[aid] = iSnap.docs.map(d=>({id:d.id,...d.data()}));
-      } catch(e) {}
-    }
+    // onSnapshot listeners will auto-refresh AM dashboards.
+    // Just re-render AVP views with current data.
     renderAVPOverview();
     renderTasksList();
-  } catch(err) { toast('Error: '+err.message,'error'); }
-  btn.disabled=false; btn.innerHTML='🔗 Map Task';
+  } catch(err) {
+    console.error('submitMapTask error:', err);
+    toast('Error mapping task: '+err.message,'error');
+  } finally {
+    btn.disabled=false; btn.innerHTML='🔗 Map Task';
+  }
 }
 
 // ================================================================
