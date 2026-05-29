@@ -991,6 +991,20 @@ let myProjects   = [];      // AM: projects from Firestore
 let unsubListeners = [];   // Firestore unsubscribe fns
 
 // ================================================================
+// TOAST NOTIFICATION
+// ================================================================
+function toast(msg, type='success', duration=3500) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  const el = document.createElement('div');
+  el.className = 'toast ' + (type||'success');
+  el.style.cssText = 'display:flex;align-items:center;gap:8px;max-width:340px;word-break:break-word';
+  el.innerHTML = (type==='error' ? '❌ ' : type==='warning' ? '⚠️ ' : '✅ ') + msg;
+  container.appendChild(el);
+  setTimeout(() => { el.style.opacity='0'; el.style.transition='opacity .4s'; setTimeout(()=>el.remove(), 400); }, duration);
+}
+
+// ================================================================
 // 5. AUTH
 // ================================================================
 function signInGoogle() {
@@ -1324,6 +1338,9 @@ function subscribeAVPInstances() {
       .onSnapshot(snap => {
         allInstances[amId] = snap.docs.map(d=>({id:d.id,...d.data()}));
         renderAVPOverview();
+        // Re-render visible AM board for this amId
+        const boardEl = document.getElementById('avp-'+amId);
+        if (boardEl && boardEl.style.display !== 'none') renderAMBoardAVP(amId);
         // Also refresh All Tasks and visible report tabs in real-time
         const activeNav = document.querySelector('.nav-item.active')?.textContent.trim()||'';
         if (activeNav.includes('All Tasks')) renderTasksList();
@@ -1527,10 +1544,11 @@ function toggleProjDetail(amId, projIdx) {
           ${arr.map(t=>`<tr>
             <td><strong style="font-size:12px">${t.name}</strong>${t.detail?`<div style="font-size:10px;color:var(--muted);margin-top:2px">${t.detail.substring(0,70)}${t.detail.length>70?'...':''}</div>`:''}</td>
             <td><span class="badge ${CAT_CLASS[t.category]||''}">${t.category}</span></td>
-            <td style="font-size:11px;white-space:nowrap">${t.day||t.due||'—'}</td>
+            <td style="font-size:11px;white-space:nowrap">${fmtScheduleLabel(t)||t.day||t.due||'—'}</td>
             <td><span class="badge ${STATUS_CLASS[t.status]||''}">${t.status}</span></td>
             <td style="white-space:nowrap">
-              <button title="Delete" style="background:none;border:none;font-size:13px;cursor:pointer" onclick="avpDeleteInstance('${amId}','${t.id}')">🗑</button>
+              <button title="Edit" style="background:none;border:none;font-size:13px;cursor:pointer;padding:2px 4px" onclick="openTaskDetail('${t.id}')">✏️</button>
+              <button title="Delete" style="background:none;border:none;font-size:13px;cursor:pointer;padding:2px 4px" onclick="avpDeleteInstance('${amId}','${t.id}')">🗑</button>
             </td>
           </tr>`).join('')}
         </tbody></table></div>
@@ -1540,6 +1558,21 @@ function toggleProjDetail(amId, projIdx) {
   panel.innerHTML = html;
   panel.style.display='block';
   setTimeout(()=>panel.scrollIntoView({behavior:'smooth',block:'nearest'}),50);
+}
+
+async function avpDeleteInstance(amId, instanceId) {
+  if (!confirm('Delete this task instance? This cannot be undone.')) return;
+  try {
+    await db.collection('taskInstances').doc(instanceId).delete();
+    // Update local cache
+    if (allInstances[amId]) allInstances[amId] = allInstances[amId].filter(x=>x.id!==instanceId);
+    myInstances = myInstances.filter(x=>x.id!==instanceId);
+    // Re-render the AM board (will show updated data)
+    renderAMBoardAVP(amId);
+    renderAVPOverview();
+    renderTasksList();
+    toast('Task deleted','success');
+  } catch(err) { toast('Error: '+err.message,'error'); }
 }
 
 function renderTasksList() {
@@ -2442,10 +2475,15 @@ async function saveEditTaskInstance(id) {
     updateLocal(myInstances);
     Object.values(allInstances||{}).forEach(arr => updateLocal(arr));
 
-    // Re-render whichever views are visible
+    // Re-render all relevant views
     renderAMToday();
     renderMyTasks();
-    if (typeof renderTasksList === 'function') renderTasksList();
+    renderTasksList();
+    // Re-render whichever AM board is open (AVP side)
+    ['birbal','ajay','ambuj'].forEach(aid => {
+      const boardEl = document.getElementById('avp-'+aid);
+      if (boardEl && boardEl.style.display !== 'none') renderAMBoardAVP(aid);
+    });
     closeModal();
     toast('✅ Task updated!','success');
   } catch(err) { toast('Error: '+err.message,'error'); }
@@ -2907,10 +2945,14 @@ async function submitMapTask(e) {
     const projNames=selCbs.map(cb=>cb.dataset.name||cb.value).join(', ');
     toast('✅ "'+task.name+'" mapped to: '+projNames,'success');
     resetMapForm();
-    // onSnapshot listeners will auto-refresh AM dashboards.
-    // Just re-render AVP views with current data.
+    // Re-render AVP overview + All Tasks immediately
     renderAVPOverview();
     renderTasksList();
+    // Re-render whichever AM board is currently open
+    ['birbal','ajay','ambuj'].forEach(aid => {
+      const boardEl = document.getElementById('avp-'+aid);
+      if (boardEl && boardEl.style.display !== 'none') renderAMBoardAVP(aid);
+    });
   } catch(err) {
     console.error('submitMapTask error:', err);
     toast('Error mapping task: '+err.message,'error');
