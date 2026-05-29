@@ -1112,26 +1112,30 @@ function fmtScheduleLabel(t) {
 }
 // Returns true if today matches the monthly due value
 function isMonthlyDayToday(due) {
-  if (!due) return true;
+  if (!due) return false; // no schedule set → never show in Today
   const now=new Date(), d=due.trim();
+  // Specific date: "26" → show on 26th of month
   if (/^\d+$/.test(d)) return now.getDate()===parseInt(d);
+  // Day occurrence: "1st-Monday", "last-Friday" etc.
   const m=d.match(/^(1st|2nd|3rd|4th|last)-(\w+)$/i);
   if (m) {
     const tgt=m[2].charAt(0).toUpperCase()+m[2].slice(1).toLowerCase();
-    if (dayName()!==tgt) return false;
+    if (dayName()!==tgt) return false; // wrong day of week
     if (m[1].toLowerCase()==='last') {
+      // "last" = the day is in the last 7 days of the month
       const nw=new Date(now); nw.setDate(now.getDate()+7);
       return nw.getMonth()!==now.getMonth();
     }
     const occ={"1st":1,"2nd":2,"3rd":3,"4th":4}[m[1].toLowerCase()]||1;
     return Math.ceil(now.getDate()/7)===occ;
   }
-  return true; // unknown legacy format → always show
+  return false; // unrecognised format → don't show
 }
-// Returns true if today matches the biweekly occurrence day
-// Supports "1st+3rd-Monday", "2nd+4th-Thursday" (2×/month) and legacy "2nd-Thursday"
+// Returns true if today matches the biweekly schedule
+// "1st+3rd-Monday" → 1st & 3rd Monday of month
+// "2nd+4th-Thursday" → 2nd & 4th Thursday of month
 function isBiweeklyDayToday(day) {
-  if (!day) return true;
+  if (!day) return false; // no schedule set → never show in Today
   // New format: "1st+3rd-Monday" or "2nd+4th-Thursday"
   const m2 = day.match(/^(1st\+3rd|2nd\+4th)-(\w+)$/i);
   if (m2) {
@@ -1140,15 +1144,7 @@ function isBiweeklyDayToday(day) {
     const wk = Math.ceil(new Date().getDate()/7);
     return m2[1]==='1st+3rd' ? (wk===1||wk===3) : (wk===2||wk===4);
   }
-  // Legacy single occurrence: "2nd-Thursday"
-  const m = day.match(/^(1st|2nd|3rd|4th)-(\w+)$/i);
-  if (m) {
-    const tgt=m[2].charAt(0).toUpperCase()+m[2].slice(1).toLowerCase();
-    if (dayName()!==tgt) return false;
-    const occ={"1st":1,"2nd":2,"3rd":3,"4th":4}[m[1].toLowerCase()]||1;
-    return Math.ceil(new Date().getDate()/7)===occ;
-  }
-  return dayName()===day; // legacy: plain day name
+  return false; // unrecognised format → don't show
 }
 // Populate monthly due <select> elements with all date/occurrence options
 function initMonthlyDueSelects() {
@@ -1409,11 +1405,14 @@ function renderAVPOverview() {
   const dn = dayName();
   const todayInsts = Object.entries(allInstances).flatMap(([amId, arr]) =>
     arr.filter(t => {
-      if (t.frequency==='daily')    return true;
-      if (t.frequency==='weekly')   return !t.day || t.day===dn;
+      if (t.frequency==='daily') {
+        if (!t.day || t.day==='Every Day') return true;
+        return t.day===dn;
+      }
+      if (t.frequency==='weekly')   return !!t.day && t.day===dn;
       if (t.frequency==='biweekly') return isBiweeklyDayToday(t.day);
-      if (t.frequency==='monthly')  return isMonthlyDayToday(t.due);
-      return t.day===dn || t.day==='Every Day';
+      if (t.frequency==='monthly')  return isMonthlyDayToday(t.due||t.day);
+      return false;
     })
   );
   if (todayInsts.length === 0) {
@@ -1447,7 +1446,9 @@ function renderAVPOverview() {
 
 function renderAMBoardAVP(amId) {
   const el = document.getElementById('avp-'+amId);
+  if (!el) return;
   const cfg = AM_CONFIG[amId];
+  if (!cfg) return;
   const inst = allInstances[amId] || [];
   const done = inst.filter(t=>t.status==='Completed').length;
   const inprog = inst.filter(t=>t.status==='In Progress').length;
@@ -1603,7 +1604,7 @@ function renderTasksList() {
 
   let html = '';
   Object.entries(byAM).forEach(([amId, tasks]) => {
-    const cfg  = AM_CONFIG[amId];
+    const cfg  = AM_CONFIG[amId] || {name:amId, email:''};
     const done = tasks.filter(t=>t.status==='Completed').length;
     const pct  = tasks.length ? Math.round(done/tasks.length*100) : 0;
     const barColor = pct>=80?'var(--green)':pct>=50?'var(--yellow)':'var(--orange)';
@@ -2121,11 +2122,16 @@ function renderAMToday() {
 
   // Stats
   const todayInsts = myInstances.filter(t => {
-    if (t.frequency==='daily')    return true; // daily instances always have periodKey=today
-    if (t.frequency==='weekly')   return !t.day || t.day===dn;
+    if (t.frequency==='daily') {
+      // "Every Day" or unset → show daily; day-specific → only on that day
+      if (!t.day || t.day==='Every Day') return true;
+      return t.day===dn;
+    }
+    if (t.frequency==='weekly')   return !!t.day && t.day===dn;
     if (t.frequency==='biweekly') return isBiweeklyDayToday(t.day);
-    if (t.frequency==='monthly')  return isMonthlyDayToday(t.due);
-    return t.periodKey===todayStr() || t.day===dn || t.day==='Every Day';
+    // Monthly: due holds schedule; fall back to day for legacy instances
+    if (t.frequency==='monthly')  return isMonthlyDayToday(t.due||t.day);
+    return false;
   });
   const done  = todayInsts.filter(t=>t.status==='Completed').length;
   const total = todayInsts.length;
@@ -2475,17 +2481,18 @@ async function saveEditTaskInstance(id) {
     updateLocal(myInstances);
     Object.values(allInstances||{}).forEach(arr => updateLocal(arr));
 
-    // Re-render all relevant views
-    renderAMToday();
-    renderMyTasks();
-    renderTasksList();
-    // Re-render whichever AM board is open (AVP side)
-    ['birbal','ajay','ambuj'].forEach(aid => {
-      const boardEl = document.getElementById('avp-'+aid);
-      if (boardEl && boardEl.style.display !== 'none') renderAMBoardAVP(aid);
-    });
     closeModal();
     toast('✅ Task updated!','success');
+    // Re-render views (wrapped so a render error never blocks save)
+    try { renderAMToday(); } catch(e) {}
+    try { renderMyTasks(); } catch(e) {}
+    try { renderTasksList(); } catch(e) {}
+    try {
+      ['birbal','ajay','ambuj'].forEach(aid => {
+        const boardEl = document.getElementById('avp-'+aid);
+        if (boardEl && boardEl.style.display !== 'none') renderAMBoardAVP(aid);
+      });
+    } catch(e) {}
   } catch(err) { toast('Error: '+err.message,'error'); }
 }
 
