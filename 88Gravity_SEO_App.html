@@ -2287,36 +2287,187 @@ function onKanbanDrop(e, newStatus) {
 
 // ── Task Detail Modal ──
 function openTaskDetail(instanceId) {
-  const t = myInstances.find(x=>x.id===instanceId);
+  // Search both myInstances and allInstances (AVP side)
+  let t = myInstances.find(x=>x.id===instanceId);
+  if (!t) {
+    for (const arr of Object.values(allInstances||{})) {
+      t = arr.find(x=>x.id===instanceId);
+      if (t) break;
+    }
+  }
   if (!t) return;
-  document.getElementById('modal-task-name').textContent = t.name;
-  const opts = STATUS_VALS.map(s=>`<option${t.status===s?' selected':''}>${s}</option>`).join('');
+
+  const cats = ['Technical','On-Page','Off-Page','Analytics','Client','Research','AI-SEO','Reporting'];
+  const prios = [{v:'high',l:'🔴 High'},{v:'medium',l:'🟡 Medium'},{v:'low',l:'🟢 Low'}];
+  const freqOpts = [
+    {v:'daily',  l:'Daily'},
+    {v:'weekly', l:'Weekly'},
+    {v:'biweekly',l:'Biweekly'},
+    {v:'monthly', l:'Monthly'},
+  ];
+
+  // Determine display state for schedule rows
+  const isWeekly   = t.frequency==='weekly';
+  const isBiweekly = t.frequency==='biweekly';
+  const isMonthly  = t.frequency==='monthly';
+
+  // Biweekly: split stored "1st+3rd-Monday" into occ + day
+  let biwOcc = '1st+3rd', biwDay = 'Monday';
+  if (isBiweekly && t.day) {
+    const bm = t.day.match(/^(1st\+3rd|2nd\+4th)-(\w+)$/i);
+    if (bm) { biwOcc=bm[1]; biwDay=bm[2]; }
+  }
+
+  const catOpts  = cats.map(c=>`<option${t.category===c?' selected':''}>${c}</option>`).join('');
+  const prioOpts = prios.map(p=>`<option value="${p.v}"${t.priority===p.v?' selected':''}>${p.l}</option>`).join('');
+  const statOpts = STATUS_VALS.map(s=>`<option${t.status===s?' selected':''}>${s}</option>`).join('');
+  const freqSel  = freqOpts.map(f=>`<option value="${f.v}"${t.frequency===f.v?' selected':''}>${f.l}</option>`).join('');
+  const days     = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+  // Build monthly due select
+  function ordS(n){if(n>=11&&n<=13)return n+'th';return n+(['','st','nd','rd'][n%10]||'th');}
+  const dateOpts = Array.from({length:31},(_,i)=>i+1).map(n=>`<option value="${n}"${t.due==n?' selected':''}>${ordS(n)} of month</option>`).join('');
+  const occOpts2 = ['1st','2nd','3rd','4th','last'].flatMap(o=>days.map(d=>`<option value="${o}-${d}"${t.due===o+'-'+d?' selected':''}>${o.charAt(0).toUpperCase()+o.slice(1)} ${d}</option>`)).join('');
+  const dueSel = `<option value="">Select...</option><optgroup label="Specific Date">${dateOpts}</optgroup><optgroup label="Day Occurrence">${occOpts2}</optgroup>`;
+
+  document.getElementById('modal-task-name').textContent = '✏️ Edit Task';
   document.getElementById('modal-body').innerHTML = `
-    <div style="margin-bottom:14px;font-size:13px;color:var(--muted)">${t.detail||'No details provided.'}</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;font-size:12px">
-      <div><strong>Project:</strong> ${t.project}</div>
-      <div><strong>Category:</strong> <span class="badge ${CAT_CLASS[t.category]||''}">${t.category}</span></div>
-      <div><strong>Frequency:</strong> <span class="freq-pill fp-${t.frequency}">${t.frequency}</span></div>
-      <div><strong>Day/Due:</strong> ${t.day||t.due||'—'}</div>
+    <div class="form-row">
+      <label class="form-label">Task Name</label>
+      <input class="form-input" id="ti-name" value="${(t.name||'').replace(/"/g,'&quot;')}">
     </div>
     <div class="form-row">
-      <label class="form-label">Status</label>
-      <select class="form-select" id="modal-status" onchange="onModalStatusChange('${t.id}')">${opts}</select>
+      <label class="form-label">Details / Instructions</label>
+      <textarea class="form-textarea" id="ti-detail">${t.detail||''}</textarea>
+    </div>
+    <div class="form-row-2">
+      <div class="form-row">
+        <label class="form-label">Category</label>
+        <select class="form-select" id="ti-cat">${catOpts}</select>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Priority</label>
+        <select class="form-select" id="ti-prio">${prioOpts}</select>
+      </div>
+    </div>
+    <div class="form-row-2">
+      <div class="form-row">
+        <label class="form-label">Status</label>
+        <select class="form-select" id="ti-status">${statOpts}</select>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Frequency</label>
+        <select class="form-select" id="ti-freq" onchange="onTiFreqChange()">${freqSel}</select>
+      </div>
+    </div>
+    <!-- Weekly day -->
+    <div class="form-row" id="ti-day-row" style="display:${isWeekly?'block':'none'}">
+      <label class="form-label">Day of Week</label>
+      <select class="form-select" id="ti-day">
+        ${days.map(d=>`<option${t.day===d?' selected':''}>${d}</option>`).join('')}
+      </select>
+    </div>
+    <!-- Biweekly occurrence + day -->
+    <div class="form-row-2" id="ti-biw-row" style="display:${isBiweekly?'grid':'none'}">
+      <div class="form-row">
+        <label class="form-label">Occurrence</label>
+        <select class="form-select" id="ti-biw-occ">
+          <option value="1st+3rd"${biwOcc==='1st+3rd'?' selected':''}>1st &amp; 3rd</option>
+          <option value="2nd+4th"${biwOcc==='2nd+4th'?' selected':''}>2nd &amp; 4th</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Day of Week</label>
+        <select class="form-select" id="ti-biw-day">
+          ${days.map(d=>`<option${biwDay===d?' selected':''}>${d}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <!-- Monthly due -->
+    <div class="form-row" id="ti-due-row" style="display:${isMonthly?'block':'none'}">
+      <label class="form-label">Monthly Schedule</label>
+      <select class="form-select" id="ti-due">${dueSel}</select>
     </div>
     <div class="form-row">
       <label class="form-label">Notes / Evidence URL</label>
-      <textarea class="form-textarea" id="modal-notes" placeholder="Add notes, screenshot URL, or evidence link...">${t.notes||''}</textarea>
+      <textarea class="form-textarea" id="ti-notes" placeholder="Add notes, screenshot URL, or evidence link...">${t.notes||''}</textarea>
     </div>
-    <button class="btn btn-success" onclick="saveModalNotes('${t.id}')">💾 Save Notes</button>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn btn-primary" onclick="saveEditTaskInstance('${t.id}')">💾 Save Changes</button>
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    </div>
   `;
   document.getElementById('modal-overlay').classList.add('open');
 }
+
+function onTiFreqChange() {
+  const freq = document.getElementById('ti-freq')?.value||'';
+  document.getElementById('ti-day-row').style.display  = freq==='weekly'   ? 'block' : 'none';
+  document.getElementById('ti-biw-row').style.display  = freq==='biweekly' ? 'grid'  : 'none';
+  document.getElementById('ti-due-row').style.display  = freq==='monthly'  ? 'block' : 'none';
+}
+
+async function saveEditTaskInstance(id) {
+  const name     = (document.getElementById('ti-name')?.value||'').trim();
+  const detail   = document.getElementById('ti-detail')?.value||'';
+  const category = document.getElementById('ti-cat')?.value||'';
+  const priority = document.getElementById('ti-prio')?.value||'medium';
+  const status   = document.getElementById('ti-status')?.value||'Not Started';
+  const freq     = document.getElementById('ti-freq')?.value||'daily';
+  const notes    = document.getElementById('ti-notes')?.value||'';
+
+  if (!name) { toast('Task name is required','error'); return; }
+
+  let day='', due='';
+  if (freq==='weekly')   day = document.getElementById('ti-day')?.value||'Monday';
+  if (freq==='biweekly') day = (document.getElementById('ti-biw-occ')?.value||'1st+3rd')+'-'+(document.getElementById('ti-biw-day')?.value||'Monday');
+  if (freq==='monthly')  due = document.getElementById('ti-due')?.value||'';
+
+  const completedAt = (status==='Completed') ? firebase.firestore.FieldValue.serverTimestamp() : null;
+
+  try {
+    await db.collection('taskInstances').doc(id).update({
+      name, detail, category, priority, status, frequency:freq, day, due, notes,
+      completedAt, updatedBy: currentUser.uid,
+    });
+    // Update local cache
+    const updateLocal = arr => {
+      const idx = arr.findIndex(x=>x.id===id);
+      if (idx!==-1) Object.assign(arr[idx], {name,detail,category,priority,status,frequency:freq,day,due,notes});
+    };
+    updateLocal(myInstances);
+    Object.values(allInstances||{}).forEach(arr => updateLocal(arr));
+
+    // Re-render whichever views are visible
+    renderAMToday();
+    renderMyTasks();
+    if (typeof renderTasksList === 'function') renderTasksList();
+    closeModal();
+    toast('✅ Task updated!','success');
+  } catch(err) { toast('Error: '+err.message,'error'); }
+}
+
+async function deleteTaskInstance(id) {
+  if (!confirm('Delete this task instance? This cannot be undone.')) return;
+  try {
+    await db.collection('taskInstances').doc(id).delete();
+    myInstances = myInstances.filter(x=>x.id!==id);
+    Object.keys(allInstances||{}).forEach(am => {
+      allInstances[am] = (allInstances[am]||[]).filter(x=>x.id!==id);
+    });
+    renderAMToday();
+    renderMyTasks();
+    if (typeof renderTasksList === 'function') renderTasksList();
+    toast('Task deleted','success');
+  } catch(err) { toast('Error: '+err.message,'error'); }
+}
+
 function onModalStatusChange(id) {
-  const s = document.getElementById('modal-status').value;
-  updateInstanceStatus(id, s);
+  const s = document.getElementById('modal-status')?.value;
+  if (s) updateInstanceStatus(id, s);
 }
 async function saveModalNotes(id) {
-  const notes = document.getElementById('modal-notes').value;
+  const notes = document.getElementById('modal-notes')?.value||'';
   await db.collection('taskInstances').doc(id).update({notes, updatedBy:currentUser.uid});
   toast('Notes saved','success');
   closeModal();
