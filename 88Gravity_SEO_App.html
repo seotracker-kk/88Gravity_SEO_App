@@ -468,8 +468,7 @@ tr:hover td{background:var(--pale-blue)}
                 <div class="form-row">
                   <label class="form-label">Occurrence</label>
                   <select class="form-select" id="f-biw-occ">
-                    <option value="1st">1st</option><option value="2nd">2nd</option>
-                    <option value="3rd">3rd</option><option value="4th">4th</option>
+                    <option value="1st+3rd">1st &amp; 3rd</option><option value="2nd+4th">2nd &amp; 4th</option>
                   </select>
                 </div>
                 <div class="form-row">
@@ -634,8 +633,7 @@ tr:hover td{background:var(--pale-blue)}
                   <div class="form-row">
                     <label class="form-label">Occurrence</label>
                     <select class="form-select" id="tlib-biw-occ">
-                      <option value="1st">1st</option><option value="2nd">2nd</option>
-                      <option value="3rd">3rd</option><option value="4th">4th</option>
+                      <option value="1st+3rd">1st &amp; 3rd</option><option value="2nd+4th">2nd &amp; 4th</option>
                     </select>
                   </div>
                   <div class="form-row">
@@ -712,8 +710,7 @@ tr:hover td{background:var(--pale-blue)}
                 <div class="form-row">
                   <label class="form-label">Occurrence</label>
                   <select class="form-select" id="map-biw-occ">
-                    <option value="1st">1st</option><option value="2nd">2nd</option>
-                    <option value="3rd">3rd</option><option value="4th">4th</option>
+                    <option value="1st+3rd">1st &amp; 3rd</option><option value="2nd+4th">2nd &amp; 4th</option>
                   </select>
                 </div>
                 <div class="form-row">
@@ -1084,14 +1081,19 @@ function ordSuffix(n) {
   if (n>=11&&n<=13) return n+'th';
   return n+(['','st','nd','rd'][n%10]||'th');
 }
-// "2nd-Thursday" or "15" → human label
+// "1st+3rd-Monday", "2nd+4th-Thursday", "15" → human label
 function fmtScheduleLabel(t) {
   if (t.frequency==='monthly'&&t.due) {
     const d=t.due.trim();
-    if (/^\d+$/.test(d)) return ordSuffix(parseInt(d));
+    if (/^\d+$/.test(d)) return ordSuffix(parseInt(d))+' of mo.';
     return d.replace('-',' ');
   }
-  if (t.day) return t.day.replace('-',' ');
+  if (t.day) {
+    // biweekly new format: "1st+3rd-Monday" → "1st & 3rd Monday"
+    const m=t.day.match(/^(1st\+3rd|2nd\+4th)-(\w+)$/i);
+    if (m) return m[1].replace('+',' & ')+' '+m[2];
+    return t.day.replace('-',' ');
+  }
   return '';
 }
 // Returns true if today matches the monthly due value
@@ -1112,10 +1114,20 @@ function isMonthlyDayToday(due) {
   }
   return true; // unknown legacy format → always show
 }
-// Returns true if today matches the biweekly occurrence day ("2nd-Thursday")
+// Returns true if today matches the biweekly occurrence day
+// Supports "1st+3rd-Monday", "2nd+4th-Thursday" (2×/month) and legacy "2nd-Thursday"
 function isBiweeklyDayToday(day) {
   if (!day) return true;
-  const m=day.match(/^(1st|2nd|3rd|4th)-(\w+)$/i);
+  // New format: "1st+3rd-Monday" or "2nd+4th-Thursday"
+  const m2 = day.match(/^(1st\+3rd|2nd\+4th)-(\w+)$/i);
+  if (m2) {
+    const tgt = m2[2].charAt(0).toUpperCase()+m2[2].slice(1).toLowerCase();
+    if (dayName()!==tgt) return false;
+    const wk = Math.ceil(new Date().getDate()/7);
+    return m2[1]==='1st+3rd' ? (wk===1||wk===3) : (wk===2||wk===4);
+  }
+  // Legacy single occurrence: "2nd-Thursday"
+  const m = day.match(/^(1st|2nd|3rd|4th)-(\w+)$/i);
   if (m) {
     const tgt=m[2].charAt(0).toUpperCase()+m[2].slice(1).toLowerCase();
     if (dayName()!==tgt) return false;
@@ -1926,7 +1938,7 @@ async function submitTask(e) {
   const day = freq.startsWith('daily-')
     ? freq.split('daily-')[1].charAt(0).toUpperCase()+freq.split('daily-')[1].slice(1)
     : freq==='weekly'    ? document.getElementById('f-day').value
-    : freq==='biweekly'  ? (document.getElementById('f-biw-occ').value+'-'+document.getElementById('f-biw-day').value)
+    : freq==='biweekly'  ? ((document.getElementById('f-biw-occ')?.value||'1st+3rd')+'-'+(document.getElementById('f-biw-day')?.value||'Monday'))
     : 'Every Day';
 
   const selectedAMs = [...document.querySelectorAll('#f-ams input[type="checkbox"]:not(#f-all-ams):checked')].map(cb=>cb.value);
@@ -2542,7 +2554,7 @@ async function submitTaskLibrary(e) {
   const tlDay = tlFreq.startsWith('daily-')
     ? tlFreq.split('daily-')[1].charAt(0).toUpperCase()+tlFreq.split('daily-')[1].slice(1)
     : tlFreq==='weekly'   ? (document.getElementById('tlib-day')?.value||'')
-    : tlFreq==='biweekly' ? ((document.getElementById('tlib-biw-occ')?.value||'1st')+'-'+(document.getElementById('tlib-biw-day')?.value||'Monday'))
+    : tlFreq==='biweekly' ? ((document.getElementById('tlib-biw-occ')?.value||'1st+3rd')+'-'+(document.getElementById('tlib-biw-day')?.value||'Monday'))
     : '';
   const task={
     name:      document.getElementById('tlib-name').value.trim(),
@@ -2665,7 +2677,7 @@ async function submitMapTask(e) {
   const day=freq.startsWith('daily-')
     ? freq.split('daily-')[1].charAt(0).toUpperCase()+freq.split('daily-')[1].slice(1)
     : freq==='weekly'   ? document.getElementById('map-day').value
-    : freq==='biweekly' ? ((document.getElementById('map-biw-occ')?.value||'1st')+'-'+(document.getElementById('map-biw-day')?.value||'Monday'))
+    : freq==='biweekly' ? ((document.getElementById('map-biw-occ')?.value||'1st+3rd')+'-'+(document.getElementById('map-biw-day')?.value||'Monday'))
     : 'Every Day';
 
   // Group by AM
@@ -2865,7 +2877,7 @@ function openEditTaskLib(id) {
       <div class="form-row">
         <label class="form-label">Occurrence</label>
         <select class="form-select" id="et-biw-occ">
-          ${['1st','2nd','3rd','4th'].map(o=>`<option value="${o}"${(t.day||'').startsWith(o+'-')?' selected':''}>${o}</option>`).join('')}
+          ${['1st+3rd','2nd+4th'].map(o=>`<option value="${o}"${(t.day||'').startsWith(o.replace('+3rd','').replace('+4th',''))?' selected':''}>${o.replace('+',' &amp; ')}</option>`).join('')}
         </select>
       </div>
       <div class="form-row">
@@ -2903,7 +2915,7 @@ async function saveEditTaskLib(id) {
   const day = etFreq.startsWith('daily-')
     ? etFreq.split('daily-')[1].charAt(0).toUpperCase()+etFreq.split('daily-')[1].slice(1)
     : etFreq==='weekly'   ? (document.getElementById('et-day')?.value||'')
-    : etFreq==='biweekly' ? ((document.getElementById('et-biw-occ')?.value||'1st')+'-'+(document.getElementById('et-biw-day')?.value||'Monday'))
+    : etFreq==='biweekly' ? ((document.getElementById('et-biw-occ')?.value||'1st+3rd')+'-'+(document.getElementById('et-biw-day')?.value||'Monday'))
     : '';
   const due = etFreq==='monthly' ? (document.getElementById('et-due')?.value||'') : '';
   if (!name){ toast('Task name is required','error'); return; }
