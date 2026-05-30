@@ -393,10 +393,9 @@ th.sortable.asc .sort-arrow,th.sortable.desc .sort-arrow{opacity:1;color:var(--m
           <div class="nav-item" onclick="avpNav('tasklibrary',this)"><span class="nav-icon">📚</span>Task Library</div>
           <div class="nav-item" onclick="avpNav('maptasks',this)"><span class="nav-icon">🔗</span>Map Tasks</div>
           <div class="nav-item" onclick="avpNav('tasks',this)"><span class="nav-icon">📋</span>All Tasks</div>
-          <div class="nav-item" onclick="avpNav('birbal',this)"><span class="nav-icon">👤</span>Birbal's Board</div>
-          <div class="nav-item" onclick="avpNav('ajay',this)"><span class="nav-icon">👤</span>Ajay's Board</div>
-          <div class="nav-item" onclick="avpNav('ambuj',this)"><span class="nav-icon">👤</span>Ambuj's Board</div>
+          <div id="am-boards-nav"><!-- AM board links injected dynamically --></div>
           <div class="nav-item" onclick="avpNav('reports',this)"><span class="nav-icon">📈</span>Reports</div>
+          <div class="nav-item" onclick="avpNav('users',this)"><span class="nav-icon">👥</span>Manage Users</div>
         </div>
         <div class="sidebar-footer">
           <button class="btn-logout" onclick="signOut()">⬅ Sign Out</button>
@@ -823,10 +822,33 @@ th.sortable.asc .sort-arrow,th.sortable.desc .sort-arrow{opacity:1;color:var(--m
           <div id="tasks-instances-body"></div>
         </div>
 
-        <!-- Per-AM boards (AVP view) -->
-        <div id="avp-birbal" class="avp-view" style="display:none"></div>
-        <div id="avp-ajay"   class="avp-view" style="display:none"></div>
-        <div id="avp-ambuj"  class="avp-view" style="display:none"></div>
+        <!-- Per-AM boards (AVP view) — injected dynamically -->
+        <div id="am-boards-container"><!-- AM board views injected dynamically --></div>
+
+        <!-- USERS MANAGEMENT VIEW -->
+        <div id="avp-users" class="avp-view" style="display:none">
+          <div class="page-header"><h1>👥 Manage Users</h1><p>Add, edit or remove AVP admins and Account Managers.</p></div>
+          <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
+            <button class="btn btn-primary" onclick="openAddUserModal('avp')">➕ Add AVP / Admin</button>
+            <button class="btn btn-success" onclick="openAddUserModal('am')">➕ Add Account Manager</button>
+          </div>
+          <!-- AVP Users -->
+          <div class="card" style="margin-bottom:18px">
+            <div class="card-title">👑 AVP / Admin Users</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody id="users-avp-table"></tbody>
+            </table></div>
+          </div>
+          <!-- AM Users -->
+          <div class="card">
+            <div class="card-title">👤 Account Managers</div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Name</th><th>Email</th><th>AM ID</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody id="users-am-table"></tbody>
+            </table></div>
+          </div>
+        </div>
 
         <div id="avp-reports" class="avp-view" style="display:none">
           <div class="page-header"><h1>📈 Reports</h1><p>Month-on-month performance across all AMs, projects & categories.</p></div>
@@ -1103,6 +1125,7 @@ let taskLibrary  = [];      // Simple task library
 let allInstances = {};     // AVP: { amId: [instances] }
 let myProjects   = [];      // AM: projects from Firestore
 let unsubListeners = [];   // Firestore unsubscribe fns
+let appUsers = [];         // All users from appUsers Firestore collection
 
 // ================================================================
 // TOAST NOTIFICATION
@@ -1152,7 +1175,18 @@ if (auth) {
       return;
     }
 
-    const info = ROLE_MAP[user.email];
+    // Try Firestore appUsers first, fall back to hardcoded ROLE_MAP
+    let info = null;
+    try {
+      const uSnap = await db.collection('appUsers')
+        .where('email','==',user.email).where('active','==',true).limit(1).get();
+      if (!uSnap.empty) {
+        const d = uSnap.docs[0].data();
+        info = { role:d.role, name:d.name, amId:d.amId||null };
+      }
+    } catch(e) { console.warn('appUsers lookup failed, using ROLE_MAP fallback:', e); }
+    if (!info) info = ROLE_MAP[user.email] || null;
+
     if (!info) {
       showScreen('login-screen');
       setTimeout(() => toast("Access denied. Only @88gravity.com team members allowed.", "error"), 300);
@@ -1377,15 +1411,18 @@ async function initAVP() {
     `${dayName()}, ${now.toLocaleDateString('en-IN',{day:'2-digit',month:'long',year:'numeric'})} · Week ${getWeekNum(now)}`;
   document.getElementById('today-day-label').textContent = `(${dayName()})`;
 
+  await seedDefaultUsers();
+  await loadAMConfigs();
   await loadTemplates();
   await loadProjects();
   await loadTaskLibrary();
 
   // Auto-generate task instances for all AMs using Firestore projects (fallback to AM_CONFIG)
-  for (const amId of ['birbal', 'ajay', 'ambuj']) {
+  for (const amId of Object.keys(AM_CONFIG)) {
     const cfg = AM_CONFIG[amId];
+    if (!cfg) continue;
     const fsProjNames = allProjects.filter(p=>p.amId===amId).map(p=>p.name);
-    const projsForAM  = fsProjNames.length ? fsProjNames : cfg.projects;
+    const projsForAM  = fsProjNames.length ? fsProjNames : (cfg.projects||[]);
     await ensureInstances(amId, projsForAM, allTemplates);
   }
 
@@ -1396,19 +1433,274 @@ async function initAVP() {
 function avpNav(view, el) {
   document.querySelectorAll('.avp-view').forEach(v => v.style.display = 'none');
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('avp-'+view).style.display = 'block';
+  const viewEl = document.getElementById('avp-'+view);
+  if (viewEl) viewEl.style.display = 'block';
   el.classList.add('active');
-  if (view === 'overview')    refreshAVPOverviewData();   // always fresh from Firestore
-  if (view === 'tasks')       refreshAndRenderAllTasks(); // always fresh from Firestore
-  if (view === 'birbal')      renderAMBoardAVP('birbal');
-  if (view === 'ajay')        renderAMBoardAVP('ajay');
-  if (view === 'ambuj')       renderAMBoardAVP('ambuj');
+  if (view === 'overview')    refreshAVPOverviewData();
+  if (view === 'tasks')       refreshAndRenderAllTasks();
   if (view === 'reports')     renderReports();
   if (view === 'projects')    renderProjectsList();
   if (view === 'tasklibrary') renderTaskLibraryTable();
   if (view === 'maptasks')    renderMapTasksView();
+  if (view === 'users')       renderUsersTable();
+  if (AM_CONFIG[view])        renderAMBoardAVP(view);
 }
 
+// ================================================================
+// USER MANAGEMENT
+// ================================================================
+
+// Seed appUsers collection from hardcoded defaults (runs once if collection is empty)
+async function seedDefaultUsers() {
+  try {
+    const snap = await db.collection('appUsers').limit(1).get();
+    if (!snap.empty) return; // already seeded
+    const batch = db.batch();
+    const now = new Date().toISOString();
+    // AVP from ROLE_MAP
+    Object.entries(ROLE_MAP).forEach(([email, info]) => {
+      if (info.role === 'avp') {
+        const ref = db.collection('appUsers').doc();
+        batch.set(ref, { name:info.name, email, role:'avp', active:true, createdAt:now, updatedAt:now });
+      }
+    });
+    // AMs — hardcoded defaults (these will be the starting point)
+    const DEFAULT_AMS = {
+      birbal: { name:'Birbal Sharma',   email:'birbal@88gravity.com',        color:'linear-gradient(135deg,#1E3A5F,#2E86AB)' },
+      ajay:   { name:'Ajay Kumar',      email:'ajay@88gravity.com',           color:'linear-gradient(135deg,#148F77,#1ABC9C)' },
+      ambuj:  { name:'Ambuj Surothiya', email:'ambujsurothiya@88gravity.com', color:'linear-gradient(135deg,#8E44AD,#9B59B6)' },
+    };
+    Object.entries(DEFAULT_AMS).forEach(([amId, cfg]) => {
+      const ref = db.collection('appUsers').doc();
+      batch.set(ref, { name:cfg.name, email:cfg.email, role:'am', amId, color:cfg.color, active:true, createdAt:now, updatedAt:now });
+    });
+    await batch.commit();
+    console.log('appUsers seeded with default users');
+  } catch(e) {
+    console.warn('seedDefaultUsers:', e);
+  }
+}
+
+// Load AM configs dynamically from appUsers, populate AM_CONFIG, rebuild nav+boards
+async function loadAMConfigs() {
+  try {
+    const snap = await db.collection('appUsers').where('role','==','am').where('active','==',true).get();
+    if (!snap.empty) {
+      // Clear and rebuild AM_CONFIG from Firestore
+      Object.keys(AM_CONFIG).forEach(k => delete AM_CONFIG[k]);
+      snap.docs.forEach(doc => {
+        const d = doc.data();
+        if (!d.amId) return;
+        AM_CONFIG[d.amId] = {
+          name:  d.name  || d.amId,
+          email: d.email || '',
+          projects: d.projects || [],
+          color: d.color || 'linear-gradient(135deg,#1E3A5F,#2E86AB)',
+        };
+      });
+    }
+  } catch(e) {
+    console.warn('loadAMConfigs: keeping hardcoded AM_CONFIG due to error:', e);
+  }
+  buildAMBoardsNav();
+  buildAMBoardsContainer();
+}
+
+// Inject per-AM nav items into sidebar
+function buildAMBoardsNav() {
+  const nav = document.getElementById('am-boards-nav');
+  if (!nav) return;
+  nav.innerHTML = Object.keys(AM_CONFIG).map(amId => {
+    const cfg = AM_CONFIG[amId];
+    const firstName = (cfg.name||amId).split(' ')[0];
+    return '<div class="nav-item" onclick="avpNav(\'' + amId + '\',this)"><span class="nav-icon">👤</span>' + firstName + '\'s Board</div>';
+  }).join('');
+}
+
+// Inject per-AM board view divs into main content area
+function buildAMBoardsContainer() {
+  const container = document.getElementById('am-boards-container');
+  if (!container) return;
+  container.innerHTML = Object.keys(AM_CONFIG).map(amId => {
+    return '<div id="avp-' + amId + '" class="avp-view" style="display:none"><div id="board-inner-' + amId + '"></div></div>';
+  }).join('');
+}
+
+// Render the Users Management tables
+async function renderUsersTable() {
+  const avpTbody = document.getElementById('users-avp-table');
+  const amTbody  = document.getElementById('users-am-table');
+  if (!avpTbody || !amTbody) return;
+  avpTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:16px">Loading...</td></tr>';
+  amTbody.innerHTML  = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:16px">Loading...</td></tr>';
+  try {
+    const snap = await db.collection('appUsers').orderBy('name').get();
+    const avpRows = [], amRows = [];
+    snap.docs.forEach(doc => {
+      const d = doc.data();
+      const isActive = d.active !== false;
+      const statusBadge = isActive
+        ? '<span style="background:#D5F5E3;color:#1a7a44;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">Active</span>'
+        : '<span style="background:#FADBD8;color:#a93226;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">Inactive</span>';
+      const toggleLabel = isActive ? 'Deactivate' : 'Activate';
+      const toggleClass = isActive ? 'btn-warning' : 'btn-success';
+      const nextActive  = !isActive;
+      if (d.role === 'avp') {
+        avpRows.push('<tr>'
+          + '<td><strong>' + (d.name||'') + '</strong></td>'
+          + '<td>' + (d.email||'') + '</td>'
+          + '<td><span style="background:#D6EAF8;color:#1a5276;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">👑 AVP</span></td>'
+          + '<td>' + statusBadge + '</td>'
+          + '<td style="white-space:nowrap;display:flex;gap:6px">'
+          + '<button class="btn btn-outline btn-sm" onclick="openEditUserModal(\'' + doc.id + '\')">✏️ Edit</button>'
+          + '<button class="btn ' + toggleClass + ' btn-sm" onclick="toggleUserActive(\'' + doc.id + '\',' + nextActive + ')">' + toggleLabel + '</button>'
+          + '</td></tr>');
+      } else {
+        amRows.push('<tr>'
+          + '<td><strong>' + (d.name||'') + '</strong></td>'
+          + '<td>' + (d.email||'') + '</td>'
+          + '<td><code style="background:#F0F4F8;padding:2px 6px;border-radius:4px;font-size:11px">' + (d.amId||'-') + '</code></td>'
+          + '<td>' + statusBadge + '</td>'
+          + '<td style="white-space:nowrap;display:flex;gap:6px">'
+          + '<button class="btn btn-outline btn-sm" onclick="openEditUserModal(\'' + doc.id + '\')">✏️ Edit</button>'
+          + '<button class="btn ' + toggleClass + ' btn-sm" onclick="toggleUserActive(\'' + doc.id + '\',' + nextActive + ')">' + toggleLabel + '</button>'
+          + '</td></tr>');
+      }
+    });
+    avpTbody.innerHTML = avpRows.join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:16px">No AVP / Admin users found</td></tr>';
+    amTbody.innerHTML  = amRows.join('')  || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:16px">No Account Managers found</td></tr>';
+  } catch(e) {
+    console.error('renderUsersTable:', e);
+    avpTbody.innerHTML = '<tr><td colspan="5" style="color:var(--red);padding:12px">Error loading users: ' + e.message + '</td></tr>';
+    amTbody.innerHTML  = '';
+  }
+}
+
+// Open modal to add a new user
+function openAddUserModal(role) {
+  const isAM = role === 'am';
+  const title = isAM ? '➕ Add Account Manager' : '➕ Add AVP / Admin';
+  const amFields = isAM ? (
+    '<div class="form-row">'
+    + '<label class="form-label">AM ID * <span style="font-size:11px;color:var(--muted)">(unique short ID, lowercase, no spaces)</span></label>'
+    + '<input class="form-input" id="um-amid" placeholder="e.g. priya">'
+    + '</div>'
+    + '<div class="form-row">'
+    + '<label class="form-label">Card Colour</label>'
+    + '<select class="form-select" id="um-color">'
+    + '<option value="linear-gradient(135deg,#1E3A5F,#2E86AB)">🔵 Blue (default)</option>'
+    + '<option value="linear-gradient(135deg,#148F77,#1ABC9C)">🟢 Green</option>'
+    + '<option value="linear-gradient(135deg,#8E44AD,#9B59B6)">🟣 Purple</option>'
+    + '<option value="linear-gradient(135deg,#E67E22,#F39C12)">🟠 Orange</option>'
+    + '<option value="linear-gradient(135deg,#E74C3C,#C0392B)">🔴 Red</option>'
+    + '<option value="linear-gradient(135deg,#2C3E50,#4A6FA5)">⚫ Dark</option>'
+    + '</select>'
+    + '</div>'
+  ) : '';
+  const mo = document.getElementById('modal-overlay');
+  mo.innerHTML = '<div class="modal">'
+    + '<div class="modal-title">' + title + '<button class="modal-close" onclick="closeModal()">✕</button></div>'
+    + '<div class="form-row"><label class="form-label">Full Name *</label>'
+    + '<input class="form-input" id="um-name" placeholder="e.g. Priya Singh"></div>'
+    + '<div class="form-row"><label class="form-label">Email Address *</label>'
+    + '<input class="form-input" id="um-email" type="email" placeholder="e.g. priya@88gravity.com"></div>'
+    + amFields
+    + '<input type="hidden" id="um-role" value="' + role + '">'
+    + '<div style="display:flex;gap:10px;margin-top:20px">'
+    + '<button class="btn btn-primary" onclick="saveUser(null)">💾 Add User</button>'
+    + '<button class="btn btn-outline" onclick="closeModal()">Cancel</button>'
+    + '</div></div>';
+  mo.classList.add('open');
+}
+
+// Open modal to edit an existing user
+async function openEditUserModal(docId) {
+  try {
+    const doc = await db.collection('appUsers').doc(docId).get();
+    if (!doc.exists) { toast('User not found','error'); return; }
+    const d = doc.data();
+    const isAM = d.role === 'am';
+    const clr = d.color || 'linear-gradient(135deg,#1E3A5F,#2E86AB)';
+    const colorOpts = [
+      ['linear-gradient(135deg,#1E3A5F,#2E86AB)','🔵 Blue'],
+      ['linear-gradient(135deg,#148F77,#1ABC9C)','🟢 Green'],
+      ['linear-gradient(135deg,#8E44AD,#9B59B6)','🟣 Purple'],
+      ['linear-gradient(135deg,#E67E22,#F39C12)','🟠 Orange'],
+      ['linear-gradient(135deg,#E74C3C,#C0392B)','🔴 Red'],
+      ['linear-gradient(135deg,#2C3E50,#4A6FA5)','⚫ Dark'],
+    ].map(([v,l]) => '<option value="' + v + '"' + (clr===v?' selected':'') + '>' + l + '</option>').join('');
+    const amFields = isAM ? (
+      '<div class="form-row">'
+      + '<label class="form-label">AM ID <span style="font-size:11px;color:var(--muted)">(changing this may affect existing data)</span></label>'
+      + '<input class="form-input" id="um-amid" value="' + (d.amId||'') + '">'
+      + '</div>'
+      + '<div class="form-row"><label class="form-label">Card Colour</label>'
+      + '<select class="form-select" id="um-color">' + colorOpts + '</select></div>'
+    ) : '';
+    const mo = document.getElementById('modal-overlay');
+    mo.innerHTML = '<div class="modal">'
+      + '<div class="modal-title">✏️ Edit ' + (isAM?'Account Manager':'AVP / Admin')
+      + '<button class="modal-close" onclick="closeModal()">✕</button></div>'
+      + '<div class="form-row"><label class="form-label">Full Name *</label>'
+      + '<input class="form-input" id="um-name" value="' + (d.name||'') + '"></div>'
+      + '<div class="form-row"><label class="form-label">Email Address *</label>'
+      + '<input class="form-input" id="um-email" type="email" value="' + (d.email||'') + '"></div>'
+      + amFields
+      + '<input type="hidden" id="um-role" value="' + d.role + '">'
+      + '<div style="display:flex;gap:10px;margin-top:20px">'
+      + '<button class="btn btn-primary" onclick="saveUser(\'' + docId + '\')">💾 Save Changes</button>'
+      + '<button class="btn btn-outline" onclick="closeModal()">Cancel</button>'
+      + '</div></div>';
+    mo.classList.add('open');
+  } catch(e) {
+    toast('Could not load user: '+e.message,'error');
+  }
+}
+
+// Save (create or update) a user in appUsers
+async function saveUser(docId) {
+  const name  = (document.getElementById('um-name')?.value||'').trim();
+  const email = (document.getElementById('um-email')?.value||'').trim().toLowerCase();
+  const role  = (document.getElementById('um-role')?.value||'am');
+  const amId  = (document.getElementById('um-amid')?.value||'').trim().toLowerCase().replace(/\s+/g,'') || null;
+  const color = (document.getElementById('um-color')?.value) || 'linear-gradient(135deg,#1E3A5F,#2E86AB)';
+  if (!name)  { toast('Name is required','error'); return; }
+  if (!email) { toast('Email is required','error'); return; }
+  if (role === 'am' && !amId) { toast('AM ID is required for Account Managers','error'); return; }
+  const now = new Date().toISOString();
+  const data = { name, email, role, active:true, updatedAt:now };
+  if (role === 'am') { data.amId = amId; data.color = color; }
+  try {
+    if (docId) {
+      await db.collection('appUsers').doc(docId).update(data);
+      toast('User updated successfully ✅','success');
+    } else {
+      data.createdAt = now;
+      await db.collection('appUsers').add(data);
+      toast('User added successfully ✅','success');
+    }
+    closeModal();
+    await renderUsersTable();
+    if (role === 'am') { await loadAMConfigs(); }
+  } catch(e) {
+    toast('Error saving user: '+e.message,'error');
+  }
+}
+
+// Toggle a user's active status
+async function toggleUserActive(docId, active) {
+  try {
+    await db.collection('appUsers').doc(docId).update({ active, updatedAt:new Date().toISOString() });
+    toast(active ? 'User activated ✅' : 'User deactivated', active ? 'success' : 'error');
+    await renderUsersTable();
+    // Rebuild AM nav if an AM was toggled
+    await loadAMConfigs();
+  } catch(e) {
+    toast('Error: '+e.message,'error');
+  }
+}
+
+// ================================================================
 // Fresh Firestore fetch for Overview tab
 async function refreshAVPOverviewData() {
   const dayK=todayStr(), wk=weekKey(), bwk=biWeekKey(), moK=monthKey();
@@ -1416,7 +1708,7 @@ async function refreshAVPOverviewData() {
   const tSnap = await db.collection('taskTemplates').where('active','==',true).get();
   allTemplates = tSnap.docs.map(d=>({id:d.id,...d.data()}));
   // Reload instances for every AM
-  for (const amId of ['birbal','ajay','ambuj']) {
+  for (const amId of Object.keys(AM_CONFIG)) {
     try {
       const iSnap = await db.collection('taskInstances')
         .where('amId','==',amId)
@@ -1442,7 +1734,7 @@ function subscribeAVPInstances() {
   const wk = weekKey(); const moK = monthKey(); const dayK = todayStr();
   unsubListeners.forEach(fn=>fn());
   unsubListeners = [];
-  ['birbal','ajay','ambuj'].forEach(amId => {
+  Object.keys(AM_CONFIG).forEach(amId => {
     const unsub = db.collection('taskInstances').where('amId','==',amId)
       .where('periodKey','in',[dayK, wk, monthKey(), biWeekKey()])
       .onSnapshot(snap => {
@@ -3160,11 +3452,10 @@ async function submitMapTask(e) {
       ? freq.split('daily-')[1].charAt(0).toUpperCase()+freq.split('daily-')[1].slice(1)
       : freq==='weekly'   ? (document.getElementById('map-day')?.value||'Monday')
       : freq==='biweekly' ? ((document.getElementById('map-biw-occ')?.value||'1st+3rd')+'-'+(document.getElementById('map-biw-day')?.value||'Monday'))
-      : freq==='daily-everyday' ? 'Every Day'
       : 'Every Day';
     const due = freq==='monthly' ? (document.getElementById('map-due')?.value||'') : '';
 
-    // Group selected projects by AM
+    // Group by AM
     const assignedToAMs=new Set();
     const assignedToProjects={};
     selCbs.forEach(cb => {
@@ -3174,13 +3465,12 @@ async function submitMapTask(e) {
       if (!assignedToProjects[proj.amId]) assignedToProjects[proj.amId]=[];
       assignedToProjects[proj.amId].push(proj.name);
     });
-    if (!assignedToAMs.size) { toast('No valid projects selected','error'); return; }
 
     const template={
       name:              task.name,
-      detail:            (document.getElementById('map-detail')?.value||'').trim() || task.detail||'',
-      category:          task.category||'',
-      priority:          task.priority||'medium',
+      detail:            document.getElementById('map-detail').value.trim() || task.detail||'',
+      category:          task.category,
+      priority:          task.priority,
       taskLibraryId:     taskId,
       frequency:         baseFreq,
       day,
@@ -3192,60 +3482,31 @@ async function submitMapTask(e) {
       createdAt:         firebase.firestore.FieldValue.serverTimestamp(),
     };
 
-    // Save template to Firestore
     const docRef=await db.collection('taskTemplates').add(template);
     template.id=docRef.id;
     allTemplates.push(template);
 
-    // Immediately create task instances if "now" is selected
-    if ((document.getElementById('map-start')?.value||'now')==='now') {
-      const dayK=todayStr(), wk=weekKey(), moK=monthKey();
+    if (document.getElementById('map-start').value==='now') {
       for (const amId of [...assignedToAMs]) {
-        const projs=assignedToProjects[amId];
-        if (!projs||!projs.length) continue;
-        // For daily tasks only run on the correct day
-        if (baseFreq==='daily' && day!=='Every Day' && day!==dayName()) continue;
-        // For weekly tasks only run on the correct day
-        if (baseFreq==='weekly' && day!==dayName()) continue;
-        const periodKey = baseFreq==='daily'?dayK : baseFreq==='weekly'?wk : moK;
-        const instBatch=db.batch();
-        projs.forEach(projName=>{
-          const instId=getInstanceId(template.id, amId, projName, baseFreq);
-          instBatch.set(db.collection('taskInstances').doc(instId), {
-            templateId:template.id, amId, project:projName, name:template.name,
-            detail:template.detail||'', category:template.category||'',
-            frequency:baseFreq, day, due,
-            priority:template.priority||'medium',
-            periodKey, calendarMonth:moK,
-            status:'Not Started', notes:'', completedAt:null, updatedBy:null,
-            createdAt:firebase.firestore.FieldValue.serverTimestamp(),
-          });
-        });
-        try {
-          await instBatch.commit();
-        } catch(batchErr) {
-          console.warn('Batch commit error for', amId, ':', batchErr.message);
-        }
+        const projects=assignedToProjects[amId];
+        const batch=db.batch(); const initRef=db.collection('periodInit');
+        const dayK=todayStr(), wk=weekKey(), bwk=biWeekKey(), moK=monthKey();
+        if (baseFreq==='daily')    batch.delete(initRef.doc(amId+'-'+dayK));
+        if (baseFreq==='weekly')   batch.delete(initRef.doc(amId+'-'+wk));
+        if (baseFreq==='biweekly') batch.delete(initRef.doc(amId+'-'+bwk));
+        if (baseFreq==='monthly')  batch.delete(initRef.doc(amId+'-'+moK));
+        await batch.commit();
+        await ensureInstances(amId, projects, [template]);
       }
     }
 
-    const projNames=selCbs.map(cb=>cb.dataset.name||cb.value).join(', ');
+    const projNames=selCbs.map(cb=>cb.dataset.name).join(', ');
     toast('✅ "'+task.name+'" mapped to: '+projNames,'success');
     resetMapForm();
-    // Re-render AVP overview + All Tasks immediately
-    renderAVPOverview();
     renderTasksList();
-    // Re-render whichever AM board is currently open
-    ['birbal','ajay','ambuj'].forEach(aid => {
-      const boardEl = document.getElementById('avp-'+aid);
-      if (boardEl && boardEl.style.display !== 'none') renderAMBoardAVP(aid);
-    });
-  } catch(err) {
-    console.error('submitMapTask error:', err);
-    toast('Error mapping task: '+err.message,'error');
-  } finally {
-    btn.disabled=false; btn.innerHTML='🔗 Map Task';
-  }
+    renderAVPOverview();
+  } catch(err) { toast('Error: '+err.message,'error'); }
+  btn.disabled=false; btn.innerHTML='🔗 Map Task';
 }
 
 // ================================================================
@@ -3256,7 +3517,7 @@ function openEditProject(id) {
   if (!p) return;
   document.getElementById('modal-task-name').textContent = '✏️ Edit Project';
   const svcOpts = ['SEO','GMB','AI-SEO & Citation'];
-  const amOpts  = [{v:'birbal',l:'Birbal Sharma'},{v:'ajay',l:'Ajay Kumar'},{v:'ambuj',l:'Ambuj Surothiya'}];
+  const amOpts  = Object.keys(AM_CONFIG).map(amId => ({v:amId, l:AM_CONFIG[amId].name}));
   document.getElementById('modal-body').innerHTML = `
     <div class="form-row">
       <label class="form-label">Project Name</label>
@@ -3279,7 +3540,7 @@ function openEditProject(id) {
       </div>
     </div>
     <div style="display:flex;gap:10px;margin-top:16px">
-      <button class="btn btn-primary" onclick="saveEditProject('${id}')">💾 Save Changes</button>
+      <button class="btn btn-primary" onclick="saveEditProject('${id}')">&#x1F4BE; Save Changes</button>
       <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
     </div>`;
   document.getElementById('modal-overlay').classList.add('open');
@@ -3313,9 +3574,10 @@ function openEditTaskLib(id) {
   document.getElementById('modal-task-name').textContent = '✏️ Edit Task Library';
   const cats = ['Technical','On-Page','Off-Page','Analytics','Client','Research','AI-SEO','Reporting'];
   const freqOpts = [
-    {v:'',l:'— none —'},{v:'daily-everyday',l:'Daily – Every Day'},{v:'daily-monday',l:'Daily – Monday'},
-    {v:'daily-tuesday',l:'Daily – Tuesday'},{v:'daily-wednesday',l:'Daily – Wednesday'},
-    {v:'daily-thursday',l:'Daily – Thursday'},{v:'daily-friday',l:'Daily – Friday'},
+    {v:'',l:'— none —'},{v:'daily-everyday',l:'Daily – Every Day'},
+    {v:'daily-monday',l:'Daily – Monday'},{v:'daily-tuesday',l:'Daily – Tuesday'},
+    {v:'daily-wednesday',l:'Daily – Wednesday'},{v:'daily-thursday',l:'Daily – Thursday'},
+    {v:'daily-friday',l:'Daily – Friday'},
     {v:'weekly',l:'Weekly'},{v:'biweekly',l:'Biweekly'},{v:'monthly',l:'Monthly'},
   ];
   let curFreq = '';
@@ -3323,8 +3585,13 @@ function openEditTaskLib(id) {
     const d=(t.day||'').toLowerCase();
     curFreq = (d==='every day'||d==='')?'daily-everyday':'daily-'+d;
   } else { curFreq = t.frequency||''; }
-  const showDay = (t.frequency==='weekly'||t.frequency==='biweekly');
-  const showDue = (t.frequency==='monthly');
+  const showDue = t.frequency==='monthly';
+  const showBiw = t.frequency==='biweekly';
+  const showDay = t.frequency==='weekly';
+  const ordSuffix = n => { if(n>=11&&n<=13)return n+'th'; return n+(['','st','nd','rd'][n%10]||'th'); };
+  const days=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const dateOpts=Array.from({length:31},(_,i)=>i+1).map(n=>`<option value="${n}"${t.due==n?' selected':''}>${ordSuffix(n)} of month</option>`).join('');
+  const occOpts=['1st','2nd','3rd','4th','last'].flatMap(o=>days.map(d=>`<option value="${o}-${d}"${t.due===o+'-'+d?' selected':''}>${o.charAt(0).toUpperCase()+o.slice(1)} ${d}</option>`)).join('');
   document.getElementById('modal-body').innerHTML = `
     <div class="form-row">
       <label class="form-label">Task Name</label>
@@ -3344,9 +3611,9 @@ function openEditTaskLib(id) {
       <div class="form-row">
         <label class="form-label">Priority</label>
         <select class="form-select" id="et-prio">
-          <option value="high"${t.priority==='high'?' selected':''}>🔴 High</option>
-          <option value="medium"${t.priority==='medium'?' selected':''}>🟡 Medium</option>
-          <option value="low"${t.priority==='low'?' selected':''}>🟢 Low</option>
+          <option value="high"${t.priority==='high'?' selected':''}>&#x1F534; High</option>
+          <option value="medium"${t.priority==='medium'?' selected':''}>&#x1F7E1; Medium</option>
+          <option value="low"${t.priority==='low'?' selected':''}>&#x1F7E2; Low</option>
         </select>
       </div>
     </div>
@@ -3357,14 +3624,14 @@ function openEditTaskLib(id) {
           ${freqOpts.map(f=>`<option value="${f.v}"${curFreq===f.v?' selected':''}>${f.l}</option>`).join('')}
         </select>
       </div>
-      <div class="form-row" id="et-day-row" style="display:${t.frequency==='weekly'?'block':'none'}">
+      <div class="form-row" id="et-day-row" style="display:${showDay?'block':'none'}">
         <label class="form-label">Day of Week</label>
         <select class="form-select" id="et-day">
           ${['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map(d=>`<option${t.day===d?' selected':''}>${d}</option>`).join('')}
         </select>
       </div>
     </div>
-    <div class="form-row-2" id="et-biw-row" style="display:${t.frequency==='biweekly'?'grid':'none'}">
+    <div class="form-row-2" id="et-biw-row" style="display:${showBiw?'grid':'none'}">
       <div class="form-row">
         <label class="form-label">Occurrence</label>
         <select class="form-select" id="et-biw-occ">
@@ -3380,7 +3647,7 @@ function openEditTaskLib(id) {
     </div>
     <div class="form-row" id="et-due-row" style="display:${showDue?'block':'none'}">
       <label class="form-label">Monthly Schedule</label>
-      <select class="form-select" id="et-due">${(()=>{const dateOpts=Array.from({length:31},(_,i)=>i+1).map(n=>`<option value="${n}"${t.due==n?' selected':''}>${ordSuffix(n)} of month</option>`).join('');const days=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];const occOpts=['1st','2nd','3rd','4th','last'].flatMap(o=>days.map(d=>`<option value="${o}-${d}"${t.due===o+'-'+d?' selected':''}>${o.charAt(0).toUpperCase()+o.slice(1)} ${d}</option>`)).join('');return '<option value="">Select...</option><optgroup label="Specific Date">'+dateOpts+'</optgroup><optgroup label="Day Occurrence">'+occOpts+'</optgroup>';})()}</select>
+      <select class="form-select" id="et-due"><option value="">Select...</option><optgroup label="Specific Date">${dateOpts}</optgroup><optgroup label="Day Occurrence">${occOpts}</optgroup></select>
     </div>
     <div style="display:flex;gap:10px;margin-top:16px">
       <button class="btn btn-primary" onclick="saveEditTaskLib('${id}')">&#x1F4BE; Save Changes</button>
@@ -3419,31 +3686,232 @@ async function saveEditTaskLib(id) {
       if (!instSnap.empty) {
         const cascadeBatch = db.batch();
         instSnap.docs.forEach(doc => {
-          cascadeBatch.update(doc.ref, {name,detail,category,priority,frequency:baseFreq,day,due});
-          ['birbal','ajay','ambuj'].forEach(amId => {
-            const arr = allInstances[amId]||[];
-            const inst = arr.find(x=>x.id===doc.id);
-            if (inst) Object.assign(inst, {name,detail,category,priority,frequency:baseFreq,day,due});
-          });
+          cascadeBatch.update(doc.ref,{name,detail,category,priority,frequency:baseFreq,day,due});
         });
         await cascadeBatch.commit();
       }
-    } catch(cascadeErr) { console.warn('Instance cascade warning:', cascadeErr.message); }
-    taskLibrary.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    } catch(ce) { console.warn('Cascade update failed:',ce); }
     renderTaskLibraryTable();
     populateMapTaskDropdown();
-    try { renderAVPOverview(); renderTasksList(); } catch(e){}
-    try {
-      ['birbal','ajay','ambuj'].forEach(aid=>{
-        const el=document.getElementById('avp-'+aid);
-        if (el&&el.style.display!=='none') renderAMBoardAVP(aid);
-      });
-    } catch(e){}
     closeModal();
-    toast('Task updated and synced to all instances!','success');
+    toast('✅ Task updated!','success');
   } catch(err){ toast('Error: '+err.message,'error'); }
 }
 
+// ================================================================
+// EDIT — TASK TEMPLATE (All Tasks — frequency / schedule)
+// ================================================================
+function openEditTemplate(id) {
+  const t = allTemplates.find(x=>x.id===id);
+  if (!t) return;
+  document.getElementById('modal-task-name').textContent = '✏️ Edit Task';
+  const cats = ['Technical','On-Page','Off-Page','Analytics','Client','Research','AI-SEO','Reporting'];
+  const days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const freqOpts = [
+    {v:'daily-everyday',l:'Daily – Every Day'},{v:'daily-monday',l:'Daily – Monday only'},
+    {v:'daily-tuesday',l:'Daily – Tuesday only'},{v:'daily-wednesday',l:'Daily – Wednesday only'},
+    {v:'daily-thursday',l:'Daily – Thursday only'},{v:'daily-friday',l:'Daily – Friday only'},
+    {v:'weekly',l:'Weekly'},{v:'biweekly',l:'Biweekly'},{v:'monthly',l:'Monthly'},
+  ];
+  let curFreq = '';
+  if (t.frequency==='daily') {
+    const d=(t.day||'').toLowerCase();
+    curFreq = (d==='every day'||d==='')?'daily-everyday':'daily-'+d;
+  } else { curFreq = t.frequency||'weekly'; }
+  const showDay = t.frequency==='weekly';
+  const showBiw = t.frequency==='biweekly';
+  const showDue = t.frequency==='monthly';
+  const amsStr  = (t.assignedToAMs||[]).map(a=>AM_CONFIG[a]?.name||a).join(', ');
+  const projCnt = Object.values(t.assignedToProjects||{}).flat().length;
+  const ordSuffix = n => { if(n>=11&&n<=13)return n+'th'; return n+(['','st','nd','rd'][n%10]||'th'); };
+  const dateOpts=Array.from({length:31},(_,i)=>i+1).map(n=>`<option value="${n}"${t.due==n?' selected':''}>${ordSuffix(n)} of month</option>`).join('');
+  const occDays=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const occOpts=['1st','2nd','3rd','4th','last'].flatMap(o=>occDays.map(d=>`<option value="${o}-${d}"${t.due===o+'-'+d?' selected':''}>${o.charAt(0).toUpperCase()+o.slice(1)} ${d}</option>`)).join('');
+  document.getElementById('modal-body').innerHTML = `
+    <div style="background:var(--pale-blue);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;line-height:1.6">
+      <strong>${t.name}</strong><br>
+      <span style="color:var(--muted)">${amsStr} · ${projCnt} project(s)</span>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Task Name</label>
+      <input class="form-input" id="etp-name" value="${(t.name||'').replace(/"/g,'&quot;')}">
+    </div>
+    <div class="form-row">
+      <label class="form-label">Details</label>
+      <textarea class="form-textarea" id="etp-detail">${t.detail||''}</textarea>
+    </div>
+    <div class="form-row-2">
+      <div class="form-row">
+        <label class="form-label">Category</label>
+        <select class="form-select" id="etp-cat">
+          ${cats.map(c=>`<option value="${c}"${t.category===c?' selected':''}>${c}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Priority</label>
+        <select class="form-select" id="etp-prio">
+          <option value="high"${t.priority==='high'?' selected':''}>&#x1F534; High</option>
+          <option value="medium"${t.priority==='medium'?' selected':''}>&#x1F7E1; Medium</option>
+          <option value="low"${t.priority==='low'?' selected':''}>&#x1F7E2; Low</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row-2">
+      <div class="form-row">
+        <label class="form-label">Frequency</label>
+        <select class="form-select" id="etp-freq" onchange="onEditFreqChange()">
+          ${freqOpts.map(f=>`<option value="${f.v}"${curFreq===f.v?' selected':''}>${f.l}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-row" id="etp-day-row" style="display:${showDay?'block':'none'}">
+        <label class="form-label">Day of Week</label>
+        <select class="form-select" id="etp-day">
+          ${days.map(d=>`<option${t.day===d?' selected':''}>${d}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="form-row-2" id="etp-biw-row" style="display:${showBiw?'grid':'none'}">
+      <div class="form-row">
+        <label class="form-label">Occurrence</label>
+        <select class="form-select" id="etp-biw-occ">
+          ${['1st+3rd','2nd+4th'].map(o=>`<option value="${o}"${(t.day||'').startsWith(o.replace('+3rd','').replace('+4th',''))?' selected':''}>${o.replace('+',' &amp; ')}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Day of Week</label>
+        <select class="form-select" id="etp-biw-day">
+          ${days.map(d=>`<option${(t.day||'').endsWith('-'+d)?' selected':''}>${d}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="form-row" id="etp-due-row" style="display:${showDue?'block':'none'}">
+      <label class="form-label">Monthly Schedule</label>
+      <select class="form-select" id="etp-due"><option value="">Select...</option><optgroup label="Specific Date">${dateOpts}</optgroup><optgroup label="Day Occurrence">${occOpts}</optgroup></select>
+    </div>
+    <div class="alert alert-info" style="font-size:11px;margin-top:4px">
+      ℹ️ Schedule changes apply from the <strong>next cycle</strong>. Existing instances are not modified.
+    </div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn btn-primary" onclick="saveEditTemplate('${id}')">&#x1F4BE; Save Changes</button>
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+    </div>`;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function onEditFreqChange() {
+  const freq = document.getElementById('etp-freq').value;
+  document.getElementById('etp-day-row').style.display = freq==='weekly'   ? 'block' : 'none';
+  document.getElementById('etp-biw-row').style.display = freq==='biweekly' ? 'grid'  : 'none';
+  document.getElementById('etp-due-row').style.display = freq==='monthly'  ? 'block' : 'none';
+}
+
+async function saveEditTemplate(id) {
+  const name     = document.getElementById('etp-name').value.trim();
+  const detail   = document.getElementById('etp-detail').value.trim();
+  const category = document.getElementById('etp-cat').value;
+  const priority = document.getElementById('etp-prio').value;
+  const freq     = document.getElementById('etp-freq').value;
+  const baseFreq = freq.startsWith('daily') ? 'daily' : freq;
+  const day = freq.startsWith('daily-')
+    ? freq.split('daily-')[1].charAt(0).toUpperCase()+freq.split('daily-')[1].slice(1)
+    : freq==='weekly'   ? (document.getElementById('etp-day')?.value||'Monday')
+    : freq==='biweekly' ? ((document.getElementById('etp-biw-occ')?.value||'1st+3rd')+'-'+(document.getElementById('etp-biw-day')?.value||'Monday'))
+    : 'Every Day';
+  const due = freq==='monthly' ? (document.getElementById('etp-due')?.value||'') : '';
+  if (!name){ toast('Task name is required','error'); return; }
+  try {
+    await db.collection('taskTemplates').doc(id).update({name,detail,category,priority,frequency:baseFreq,day,due});
+    const idx = allTemplates.findIndex(t=>t.id===id);
+    if (idx!==-1) Object.assign(allTemplates[idx],{name,detail,category,priority,frequency:baseFreq,day,due});
+    renderTasksList();
+    closeModal();
+    toast('✅ Task updated! Changes apply next cycle.','success');
+  } catch(err){ toast('Error: '+err.message,'error'); }
+}
+
+// ================================================================
+// TASK INSTANCE DELETE (AM)
+// ================================================================
+async function deleteTaskInstance(id) {
+  if (!confirm('Remove this task from your list?')) return;
+  try {
+    await db.collection('taskInstances').doc(id).delete();
+    myInstances = myInstances.filter(t=>t.id!==id);
+    renderAMToday();
+    const activeTab = document.querySelector('.am-tab.active')?.textContent.trim();
+    if (activeTab?.includes('My Tasks'))  renderMyTasks();
+    if (activeTab?.includes('Project'))   renderProjects();
+    if (activeTab?.includes('Kanban'))    renderKanban();
+    toast('Task removed','success');
+  } catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+// ================================================================
+// AVP BOARD TASK DELETE
+// ================================================================
+async function avpDeleteInstance(amId, instanceId) {
+  if (!confirm('Remove this task instance?')) return;
+  try {
+    await db.collection('taskInstances').doc(instanceId).delete();
+    if (allInstances[amId]) allInstances[amId]=allInstances[amId].filter(t=>t.id!==instanceId);
+    renderAMBoardAVP(amId);
+    toast('Task removed','success');
+  } catch(e){ toast('Error: '+e.message,'error'); }
+}
+
+// ================================================================
+// SERVICE TYPE MULTISELECT HELPERS
+// ================================================================
+function toggleServiceDropdown() {
+  const dd      = document.getElementById('f-service-dropdown');
+  const trigger = document.getElementById('f-service-trigger');
+  const isOpen  = dd.style.display !== 'none';
+  dd.style.display = isOpen ? 'none' : 'block';
+  trigger.classList.toggle('open', !isOpen);
+}
+
+function updateServiceLabel() {
+  const checked = [...document.querySelectorAll('#f-service-dropdown input:checked')].map(c => c.value);
+  const lbl  = document.getElementById('f-service-label');
+  const tags = document.getElementById('f-service-tags');
+  if (checked.length) {
+    lbl.textContent = checked.join(', ');
+    lbl.style.color = 'var(--text)';
+    tags.innerHTML  = checked.map(v => '<span class="multisel-tag">' + v + '</span>').join('');
+  } else {
+    lbl.textContent = 'Select service types...';
+    lbl.style.color = 'var(--muted)';
+    tags.innerHTML  = '';
+  }
+}
+
+document.addEventListener('click', function(e) {
+  [
+    ['f-service-wrap',    'f-service-dropdown',    'f-service-trigger'],
+    ['proj-service-wrap', 'proj-service-dropdown', 'proj-service-trigger'],
+  ].forEach(([wid, did, tid]) => {
+    const w = document.getElementById(wid);
+    if (w && !w.contains(e.target)) {
+      const d = document.getElementById(did), t = document.getElementById(tid);
+      if (d) d.style.display = 'none';
+      if (t) t.classList.remove('open');
+    }
+  });
+});
+
+// ================================================================
+// 12. TOAST
+// ================================================================
+function toast(msg, type='success', duration=3500) {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(()=>t.remove(), duration);
+}
 </script>
+
+
 </body>
 </html>
