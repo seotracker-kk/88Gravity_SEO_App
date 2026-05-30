@@ -782,6 +782,9 @@ th.sortable.asc .sort-arrow,th.sortable.desc .sort-arrow{opacity:1;color:var(--m
               <option value="daily">Daily</option><option value="weekly">Weekly</option>
               <option value="biweekly">Biweekly</option><option value="monthly">Monthly</option>
             </select>
+            <select class="form-select" id="tasks-filter-proj" style="width:170px" onchange="filterTasksList()">
+              <option value="">All Projects</option>
+            </select>
             <select class="form-select" id="tasks-filter-status" style="width:150px" onchange="filterTasksList()">
               <option value="">All Statuses</option>
               <option value="Not Started">Not Started</option>
@@ -962,10 +965,37 @@ function setSortCol(key, col, renderFn) {
   renderFn();
 }
 
+// Day-of-week order for natural sort (Mon first, Sat last)
+const DAY_ORDER = {monday:1,tuesday:2,wednesday:3,thursday:4,friday:5,saturday:6,sunday:7};
+
+function daySortVal(val) {
+  if (!val) return 99;
+  const v = val.toLowerCase();
+  // biweekly "1st+3rd-Monday" → extract day part
+  const m = v.match(/-(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/);
+  if (m) return DAY_ORDER[m[1]] || 99;
+  // plain day name
+  if (DAY_ORDER[v]) return DAY_ORDER[v];
+  // occurrence like "1st-Monday" → extract day
+  const m2 = v.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);
+  if (m2) return DAY_ORDER[m2[1]] || 99;
+  return 99;
+}
+
 function sortedArr(arr, key) {
   const s = sortState[key];
   if (!s) return arr;
   return [...arr].sort((a, b) => {
+    // Day column → use weekday order, not alphabetical
+    if (s.col === 'day') {
+      const rawA = a.day || a.due || '';
+      const rawB = b.day || b.due || '';
+      const da = daySortVal(rawA);
+      const db = daySortVal(rawB);
+      if (da !== db) return s.dir * (da - db);
+      // tie-break alphabetically on name
+      return (a.name||'').toLowerCase().localeCompare((b.name||'').toLowerCase());
+    }
     let va = (a[s.col] || '').toString().toLowerCase();
     let vb = (b[s.col] || '').toString().toLowerCase();
     return s.dir * va.localeCompare(vb);
@@ -1641,10 +1671,27 @@ async function avpDeleteInstance(amId, instanceId) {
   } catch(err) { toast('Error: '+err.message,'error'); }
 }
 
+function populateTasksProjectFilter() {
+  const sel = document.getElementById('tasks-filter-proj');
+  if (!sel) return;
+  const curVal = sel.value;
+  // Collect all distinct projects across all AMs
+  const projs = [...new Set(
+    ['birbal','ajay','ambuj'].flatMap(amId => (allInstances[amId]||[]).map(t=>t.project||''))
+      .filter(Boolean).sort()
+  )];
+  sel.innerHTML = '<option value="">All Projects</option>' +
+    projs.map(p=>`<option value="${p}"${curVal===p?' selected':''}>${p}</option>`).join('');
+}
+
 function renderTasksList() {
+  // Refresh project dropdown each time (data may have changed)
+  populateTasksProjectFilter();
+
   const search     = (document.getElementById('tasks-search')?.value||'').toLowerCase();
   const amFilt     = document.getElementById('tasks-filter-am')?.value||'';
   const freqFilt   = document.getElementById('tasks-filter-freq')?.value||'';
+  const projFilt   = document.getElementById('tasks-filter-proj')?.value||'';
   const statusFilt = document.getElementById('tasks-filter-status')?.value||'';
   const container  = document.getElementById('tasks-instances-body');
 
@@ -1656,6 +1703,7 @@ function renderTasksList() {
     (!search     || t.name.toLowerCase().includes(search) || (t.detail||'').toLowerCase().includes(search) ||
                     (t.project||'').toLowerCase().includes(search) || (t.category||'').toLowerCase().includes(search)) &&
     (!freqFilt   || t.frequency === freqFilt) &&
+    (!projFilt   || t.project === projFilt) &&
     (!statusFilt || t.status === statusFilt)
   );
 
@@ -3277,24 +3325,15 @@ async function saveEditTaskLib(id) {
   const due = etFreq==='monthly' ? (document.getElementById('et-due')?.value||'') : '';
   if (!name){ toast('Task name is required','error'); return; }
   try {
-    // 1. Update the template in taskLibrary
     await db.collection('taskLibrary').doc(id).update({name,detail,category,priority,frequency:baseFreq,day,due});
     const idx = taskLibrary.findIndex(t=>t.id===id);
     if (idx!==-1) Object.assign(taskLibrary[idx],{name,detail,category,priority,frequency:baseFreq,day,due});
-
-    // 2. Cascade schedule changes to all existing instances of this task
-    //    so AMs see the correct schedule immediately without waiting for next month
     try {
-      const instSnap = await db.collection('taskInstances')
-        .where('templateId','==',id).get();
+      const instSnap = await db.collection('taskInstances').where('templateId','==',id).get();
       if (!instSnap.empty) {
         const cascadeBatch = db.batch();
         instSnap.docs.forEach(doc => {
-          cascadeBatch.update(doc.ref, {
-            name, detail, category, priority,
-            frequency: baseFreq, day, due
-          });
-          // Also update local cache
+          cascadeBatch.update(doc.ref, {name,detail,category,priority,frequency:baseFreq,day,due});
           ['birbal','ajay','ambuj'].forEach(amId => {
             const arr = allInstances[amId]||[];
             const inst = arr.find(x=>x.id===doc.id);
@@ -3303,14 +3342,10 @@ async function saveEditTaskLib(id) {
         });
         await cascadeBatch.commit();
       }
-    } catch(cascadeErr) {
-      console.warn('Instance cascade warning:', cascadeErr.message);
-    }
-
+    } catch(cascadeErr) { console.warn('Instance cascade warning:', cascadeErr.message); }
     taskLibrary.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
     renderTaskLibraryTable();
     populateMapTaskDropdown();
-    // Re-render AM boards so updated schedule labels appear immediately
     try { renderAVPOverview(); renderTasksList(); } catch(e){}
     try {
       ['birbal','ajay','ambuj'].forEach(aid=>{
