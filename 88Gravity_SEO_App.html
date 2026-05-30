@@ -217,6 +217,14 @@ tr:hover td{background:var(--pale-blue)}
 .filter-chip.active{background:var(--dark-blue);color:#fff}
 .search-input{padding:7px 12px;border:2px solid #E9ECF0;border-radius:8px;font-size:12px;outline:none;width:180px}
 .search-input:focus{border-color:var(--mid-blue)}
+.sort-chip{padding:4px 10px;border-radius:14px;font-size:11px;font-weight:600;cursor:pointer;background:var(--pale-blue);color:var(--dark-blue);border:2px solid transparent;white-space:nowrap}
+.sort-chip.active{background:var(--dark-blue);color:#fff;border-color:var(--dark-blue)}
+.sort-chip:hover{background:var(--mid-blue);color:#fff}
+th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
+th.sortable:hover{background:rgba(0,0,0,.07)}
+th.sortable .sort-arrow{font-size:10px;margin-left:3px;opacity:.6}
+th.sortable.asc .sort-arrow,th.sortable.desc .sort-arrow{opacity:1;color:var(--mid-blue)}
+
 
 /* ── LOADING ─────────────────────────────── */
 .spinner{display:inline-block;width:20px;height:20px;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
@@ -656,9 +664,12 @@ tr:hover td{background:var(--pale-blue)}
             </div>
             <!-- TABLE -->
             <div class="card">
-              <div class="card-title">📋 Task Library <span id="tlib-count" style="font-size:11px;font-weight:400;color:var(--muted)"></span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+                <div class="card-title" style="margin:0">📋 Task Library <span id="tlib-count" style="font-size:11px;font-weight:400;color:var(--muted)"></span></div>
+                <input class="search-input" id="tlib-search" placeholder="🔍 Search library..." oninput="renderTaskLibraryTable()" style="width:220px">
+              </div>
               <div class="table-wrap">
-                <table><thead><tr><th>Task Name</th><th>Category</th><th>Priority</th><th>Frequency</th><th>Day/Due</th><th></th></tr></thead>
+                <table><thead id="tlib-thead"><tr><th>Task Name</th><th>Category</th><th>Priority</th><th>Frequency</th><th>Day/Due</th><th></th></tr></thead>
                 <tbody id="tasklibrary-table-body"><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">No tasks in library yet.</td></tr></tbody>
                 </table>
               </div>
@@ -838,6 +849,10 @@ tr:hover td{background:var(--pale-blue)}
         <div class="today-sub" id="am-date-sub"></div>
         <div id="am-today-alerts"></div>
         <div class="stats-row" id="am-today-stats"></div>
+        <div class="filter-bar" style="margin-top:10px">
+          <input class="search-input" id="today-search" placeholder="🔍 Search today's tasks..." oninput="renderAMToday()" style="flex:1;max-width:280px">
+          <div id="today-sort-bar" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"></div>
+        </div>
         <div id="am-today-list"></div>
       </div>
       <!-- MY TASKS VIEW -->
@@ -855,12 +870,16 @@ tr:hover td{background:var(--pale-blue)}
       </div>
       <!-- BY PROJECT VIEW -->
       <div id="am-projects" style="display:none">
+        <div class="filter-bar">
+          <input class="search-input" id="proj-search" placeholder="🔍 Search tasks..." oninput="renderProjects()" style="flex:1;max-width:280px">
+        </div>
         <div class="proj-tabs" id="am-proj-tabs"></div>
         <div id="am-proj-content"></div>
       </div>
       <!-- KANBAN VIEW -->
       <div id="am-kanban" style="display:none">
         <div class="filter-bar">
+          <input class="search-input" id="kb-search" placeholder="🔍 Search..." oninput="renderKanban()" style="flex:1;max-width:220px">
           <select class="form-select" id="kb-proj-filter" style="width:150px" onchange="renderKanban()">
             <option value="">All Projects</option>
           </select>
@@ -930,6 +949,45 @@ const KANBAN_COLS = [
   {id:"review",   label:"👁️ Pending Review", statuses:["Pending Review"],        color:"#E67E22"},
   {id:"done",     label:"✅ Done",          statuses:["Completed"],               color:"#27AE60"},
 ];
+
+// ================================================================
+// SORT & SEARCH UTILITIES
+// ================================================================
+const sortState = {};   // { [key]: {col, dir} }   dir: 1=asc, -1=desc
+
+function setSortCol(key, col, renderFn) {
+  const s = sortState[key];
+  if (s && s.col === col) sortState[key] = {col, dir: -s.dir};
+  else sortState[key] = {col, dir: 1};
+  renderFn();
+}
+
+function sortedArr(arr, key) {
+  const s = sortState[key];
+  if (!s) return arr;
+  return [...arr].sort((a, b) => {
+    let va = (a[s.col] || '').toString().toLowerCase();
+    let vb = (b[s.col] || '').toString().toLowerCase();
+    return s.dir * va.localeCompare(vb);
+  });
+}
+
+function thSort(key, col, label, renderName) {
+  const s = sortState[key];
+  const isActive = s && s.col === col;
+  const arrow = isActive ? (s.dir === 1 ? ' ↑' : ' ↓') : ' ⇅';
+  const cls = isActive ? (s.dir === 1 ? 'sortable asc' : 'sortable desc') : 'sortable';
+  return `<th class="${cls}" onclick="setSortCol('${key}','${col}',${renderName})">${label}<span class="sort-arrow">${arrow}</span></th>`;
+}
+
+function sortToolbar(key, renderName, cols) {
+  const s = sortState[key];
+  return cols.map(([label, col]) => {
+    const isActive = s && s.col === col;
+    const arrow = isActive ? (s.dir === 1 ? ' ↑' : ' ↓') : '';
+    return `<button class="sort-chip${isActive?' active':''}" onclick="setSortCol('${key}','${col}',${renderName})">${label}${arrow}</button>`;
+  }).join('');
+}
 
 // ================================================================
 // 3. FIREBASE INIT — with error handling & timeout fallback
@@ -1522,12 +1580,16 @@ function toggleProjDetail(amId, projIdx) {
 
   const done = tasks.filter(t=>t.status==='Completed').length;
   const pct  = tasks.length ? Math.round(done/tasks.length*100) : 0;
+  const sortKey = `pd-${amId}-${projIdx}`;
+  // Store last-open detail so sort header can re-render
+  window._lastProjDetail = {amId, projIdx};
+  const thPD = (col, lbl) => thSort(sortKey, col, lbl, `function(){const l=window._lastProjDetail;if(l)toggleProjDetail(l.amId,l.projIdx)}`);
   const groups = {daily:[],weekly:[],biweekly:[],monthly:[]};
   tasks.forEach(t=>{ (groups[t.frequency]||groups.daily).push(t); });
   const freqLabels = {daily:'🗓️ Daily',weekly:'📆 Weekly',biweekly:'🔁 Biweekly',monthly:'📅 Monthly'};
 
   let html = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px">
       <h3 style="font-size:15px;font-weight:700;color:var(--dark-blue)">📁 ${proj}</h3>
       <div style="display:flex;align-items:center;gap:10px">
         <span style="font-size:12px;color:var(--muted)">${done}/${tasks.length} completed</span>
@@ -1538,11 +1600,14 @@ function toggleProjDetail(amId, projIdx) {
 
   Object.entries(groups).forEach(([freq, arr]) => {
     if (!arr.length) return;
+    const sorted = sortedArr(arr, sortKey);
     html += `
       <div style="margin-bottom:16px">
         <div style="font-size:11px;font-weight:700;color:#fff;background:var(--dark-blue);padding:5px 12px;border-radius:6px;margin-bottom:8px;display:inline-block">${freqLabels[freq]} (${arr.length})</div>
-        <div class="table-wrap"><table><thead><tr><th>Task</th><th>Category</th><th>Day/Due</th><th>Status</th><th></th></tr></thead><tbody>
-          ${arr.map(t=>`<tr>
+        <div class="table-wrap"><table><thead><tr>
+          ${thPD('name','Task')}${thPD('category','Category')}${thPD('day','Day/Due')}${thPD('status','Status')}<th></th>
+        </tr></thead><tbody>
+          ${sorted.map(t=>`<tr>
             <td><strong style="font-size:12px">${t.name}</strong>${t.detail?`<div style="font-size:10px;color:var(--muted);margin-top:2px">${t.detail.substring(0,70)}${t.detail.length>70?'...':''}</div>`:''}</td>
             <td><span class="badge ${CAT_CLASS[t.category]||''}">${t.category}</span></td>
             <td style="font-size:11px;white-space:nowrap">${fmtScheduleLabel(t)||t.day||t.due||'—'}</td>
@@ -1588,7 +1653,8 @@ function renderTasksList() {
   let allInst = amIds.flatMap(amId =>
     (allInstances[amId]||[]).map(t=>({...t, amId}))
   ).filter(t =>
-    (!search     || t.name.toLowerCase().includes(search) || (t.detail||'').toLowerCase().includes(search)) &&
+    (!search     || t.name.toLowerCase().includes(search) || (t.detail||'').toLowerCase().includes(search) ||
+                    (t.project||'').toLowerCase().includes(search) || (t.category||'').toLowerCase().includes(search)) &&
     (!freqFilt   || t.frequency === freqFilt) &&
     (!statusFilt || t.status === statusFilt)
   );
@@ -1598,9 +1664,14 @@ function renderTasksList() {
     return;
   }
 
+  // Sort all instances together
+  allInst = sortedArr(allInst, 'alltasks');
+
   // Group by AM
   const byAM = {};
   allInst.forEach(t => { (byAM[t.amId] = byAM[t.amId]||[]).push(t); });
+
+  const thA = (col,lbl) => thSort('alltasks',col,lbl,'renderTasksList');
 
   let html = '';
   Object.entries(byAM).forEach(([amId, tasks]) => {
@@ -1621,7 +1692,7 @@ function renderTasksList() {
         </div>
       </div>
       <div class="table-wrap">
-        <table><thead><tr><th>Task Name</th><th>Project</th><th>Category</th><th>Freq</th><th>Day/Due</th><th>Status</th><th>Actions</th></tr></thead>
+        <table><thead><tr>${thA('name','Task Name')}${thA('project','Project')}${thA('category','Category')}${thA('frequency','Freq')}${thA('day','Day/Due')}${thA('status','Status')}<th>Actions</th></tr></thead>
         <tbody>
           ${tasks.map(t=>`<tr>
             <td><strong style="font-size:12px">${t.name}</strong>${t.detail?`<div style="font-size:10px;color:var(--muted)">${t.detail.substring(0,60)}${t.detail.length>60?'...':''}</div>`:''}</td>
@@ -2144,9 +2215,29 @@ function renderAMToday() {
     <div class="stat-box" style="border-top-color:var(--mid-blue)"><div class="n" style="color:var(--mid-blue)">${total?Math.round(done/total*100):0}%</div><div class="l">Today Done</div></div>
   `;
 
+  // Search + sort toolbar
+  const todaySearch = (document.getElementById('today-search')?.value||'').toLowerCase();
+  const sortBar = document.getElementById('today-sort-bar');
+  if (sortBar) sortBar.innerHTML = '<span style="font-size:11px;color:var(--muted);font-weight:600">Sort:</span> ' +
+    sortToolbar('today','renderAMToday',[['Name','name'],['Status','status'],['Category','category'],['Priority','priority'],['Project','project']]);
+
+  let displayInsts = todayInsts;
+  if (todaySearch) displayInsts = displayInsts.filter(t =>
+    t.name.toLowerCase().includes(todaySearch) ||
+    (t.detail||'').toLowerCase().includes(todaySearch) ||
+    (t.project||'').toLowerCase().includes(todaySearch) ||
+    (t.category||'').toLowerCase().includes(todaySearch)
+  );
+  displayInsts = sortedArr(displayInsts, 'today');
+
   const list = document.getElementById('am-today-list');
-  if (todayInsts.length === 0) { list.innerHTML=`<div class="empty-state"><div class="icon">✅</div><p>No tasks for today — all clear!</p></div>`; return; }
-  list.innerHTML = todayInsts.map(t => taskRowHTML(t)).join('');
+  if (displayInsts.length === 0) {
+    list.innerHTML = todayInsts.length === 0
+      ? `<div class="empty-state"><div class="icon">✅</div><p>No tasks for today — all clear!</p></div>`
+      : `<div class="empty-state"><div class="icon">🔍</div><p>No tasks match your search.</p></div>`;
+    return;
+  }
+  list.innerHTML = displayInsts.map(t => taskRowHTML(t)).join('');
 }
 
 function taskRowHTML(t) {
@@ -2201,9 +2292,21 @@ function renderMyTasks() {
     monthly:  {label:'📅 Monthly Tasks',  color:'var(--orange)',    dayLabel:t=>t.due||''},
   };
 
+  // Sort toolbar (injected into filter-bar after the freq select)
+  let sortBarMT = document.getElementById('mt-sort-bar');
+  if (!sortBarMT) {
+    sortBarMT = document.createElement('div');
+    sortBarMT.id = 'mt-sort-bar';
+    sortBarMT.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;align-items:center';
+    const fb = document.querySelector('#am-mytasks .filter-bar');
+    if (fb) fb.appendChild(sortBarMT);
+  }
+  sortBarMT.innerHTML = '<span style="font-size:11px;color:var(--muted);font-weight:600">Sort:</span> ' +
+    sortToolbar('mytasks','renderMyTasks',[['Name','name'],['Status','status'],['Category','category'],['Priority','priority'],['Project','project']]);
+
   let html = '';
   Object.entries(freqMeta).forEach(([freq, meta]) => {
-    const tasks = groups[freq];
+    let tasks = sortedArr(groups[freq], 'mytasks');
     if (!tasks.length) return;
     html += `<div style="margin-bottom:20px">
       <div style="background:${meta.color};color:#fff;padding:8px 14px;border-radius:8px;font-weight:700;font-size:13px;margin-bottom:8px">${meta.label} (${tasks.length})</div>
@@ -2245,31 +2348,51 @@ function selectProjTab(el, proj) {
 }
 
 function renderProjContent(proj, cont) {
-  const tasks = myInstances.filter(t=>t.project===proj);
+  const projSearch = (document.getElementById('proj-search')?.value||'').toLowerCase();
+  let tasks = myInstances.filter(t => t.project===proj &&
+    (!projSearch || t.name.toLowerCase().includes(projSearch) ||
+      (t.detail||'').toLowerCase().includes(projSearch) ||
+      (t.category||'').toLowerCase().includes(projSearch))
+  );
   const done  = tasks.filter(t=>t.status==='Completed').length;
-  const pct   = tasks.length ? Math.round(done/tasks.length*100) : 0;
+  const total = myInstances.filter(t=>t.project===proj).length;
+  const pct   = total ? Math.round(done/total*100) : 0;
 
   const groups = {daily:[],weekly:[],biweekly:[],monthly:[]};
   tasks.forEach(t=>{ if(groups[t.frequency]) groups[t.frequency].push(t); });
+
+  // Sort toolbar
+  const sortKeyPC = 'projcontent';
+  const sortBar = `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+    <span style="font-size:11px;color:var(--muted);font-weight:600">Sort:</span>
+    ${sortToolbar(sortKeyPC,'renderProjects',[['Name','name'],['Status','status'],['Category','category'],['Priority','priority']])}
+  </div>`;
 
   let html = `
     <div class="proj-progress">
       <strong style="font-size:14px">${proj}</strong>
       <div class="proj-bar"><div class="proj-bar-fill" style="width:${pct}%"></div></div>
       <span style="font-size:12px;font-weight:700;color:var(--green)">${pct}%</span>
-      <span style="font-size:11px;color:var(--muted)">${done}/${tasks.length} done</span>
-    </div>`;
+      <span style="font-size:11px;color:var(--muted)">${done}/${total} done</span>
+    </div>
+    ${sortBar}`;
 
   const freqLabels = {daily:'🗓️ Daily',weekly:'📆 Weekly',biweekly:'🔁 Biweekly',monthly:'📅 Monthly'};
+  let anyTasks = false;
   Object.entries(groups).forEach(([freq,arr])=>{
     if (!arr.length) return;
+    anyTasks = true;
+    const sorted = sortedArr(arr, sortKeyPC);
     html += `<div class="card" style="margin-bottom:12px">
       <div class="card-title">${freqLabels[freq]} (${arr.length})</div>
-      ${arr.map(t=>taskRowHTML(t)).join('')}
+      ${sorted.map(t=>taskRowHTML(t)).join('')}
     </div>`;
   });
 
-  cont.innerHTML = html || `<div class="empty-state"><div class="icon">📋</div><p>No tasks for ${proj} yet.</p></div>`;
+  if (!anyTasks) {
+    html += `<div class="empty-state"><div class="icon">${projSearch?'🔍':'📋'}</div><p>${projSearch?'No tasks match your search.':'No tasks for '+proj+' yet.'}</p></div>`;
+  }
+  cont.innerHTML = html;
 }
 
 // ── Kanban View ──
@@ -2281,11 +2404,15 @@ function populateKBFilter() {
 }
 
 function renderKanban() {
-  const projF = document.getElementById('kb-proj-filter')?.value||'';
-  const freqF = document.getElementById('kb-freq-filter')?.value||'';
+  const projF   = document.getElementById('kb-proj-filter')?.value||'';
+  const freqF   = document.getElementById('kb-freq-filter')?.value||'';
+  const search  = (document.getElementById('kb-search')?.value||'').toLowerCase();
   let inst = myInstances.filter(t =>
-    (!projF || t.project===projF) &&
-    (!freqF || t.frequency===freqF)
+    (!projF  || t.project===projF) &&
+    (!freqF  || t.frequency===freqF) &&
+    (!search || t.name.toLowerCase().includes(search) ||
+                (t.detail||'').toLowerCase().includes(search) ||
+                (t.project||'').toLowerCase().includes(search))
   );
 
   const board = document.getElementById('kanban-board');
@@ -2727,13 +2854,32 @@ function renderTaskLibraryTable() {
   if (!tbody) return;
   const cnt=document.getElementById('tlib-count');
   if (cnt) cnt.textContent='('+taskLibrary.length+')';
-  if (!taskLibrary.length) {
-    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">No tasks in library yet. Add one using the form.</td></tr>';
+
+  // Sortable headers
+  const thead = document.getElementById('tlib-thead');
+  if (thead) {
+    const th = (col, lbl) => thSort('tlib', col, lbl, 'renderTaskLibraryTable');
+    thead.innerHTML = `<tr>${th('name','Task Name')}${th('category','Category')}${th('priority','Priority')}${th('frequency','Frequency')}${th('day','Day/Due')}<th></th></tr>`;
+  }
+
+  // Search filter
+  const tlSearch = (document.getElementById('tlib-search')?.value||'').toLowerCase();
+  let lib = taskLibrary;
+  if (tlSearch) lib = lib.filter(t =>
+    t.name.toLowerCase().includes(tlSearch) ||
+    (t.detail||'').toLowerCase().includes(tlSearch) ||
+    (t.category||'').toLowerCase().includes(tlSearch) ||
+    (t.frequency||'').toLowerCase().includes(tlSearch)
+  );
+  lib = sortedArr(lib, 'tlib');
+
+  if (!lib.length) {
+    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">'+(taskLibrary.length?'No tasks match your search.':'No tasks in library yet. Add one using the form.')+'</td></tr>';
     return;
   }
   const prioHtml = p => p==='high'?'<span style="color:var(--red);font-weight:700;font-size:11px">🔴 High</span>':p==='medium'?'<span style="color:var(--yellow);font-weight:700;font-size:11px">🟡 Medium</span>':'<span style="color:var(--green);font-weight:700;font-size:11px">🟢 Low</span>';
   const freqLabel = f => f?('<span class="freq-pill fp-'+f.split('-')[0]+'">'+f.replace('daily-','').replace('everyday','every day')+'</span>'):'—';
-  tbody.innerHTML = taskLibrary.map(t => {
+  tbody.innerHTML = lib.map(t => {
     const dayDue = t.day||t.due||'—';
     return '<tr>' +
       '<td><strong>'+t.name+'</strong>'+(t.detail?'<div style="font-size:10px;color:var(--muted);margin-top:2px">'+t.detail.substring(0,60)+'...</div>':'')+'</td>'+
@@ -3131,14 +3277,49 @@ async function saveEditTaskLib(id) {
   const due = etFreq==='monthly' ? (document.getElementById('et-due')?.value||'') : '';
   if (!name){ toast('Task name is required','error'); return; }
   try {
+    // 1. Update the template in taskLibrary
     await db.collection('taskLibrary').doc(id).update({name,detail,category,priority,frequency:baseFreq,day,due});
     const idx = taskLibrary.findIndex(t=>t.id===id);
     if (idx!==-1) Object.assign(taskLibrary[idx],{name,detail,category,priority,frequency:baseFreq,day,due});
+
+    // 2. Cascade schedule changes to all existing instances of this task
+    //    so AMs see the correct schedule immediately without waiting for next month
+    try {
+      const instSnap = await db.collection('taskInstances')
+        .where('templateId','==',id).get();
+      if (!instSnap.empty) {
+        const cascadeBatch = db.batch();
+        instSnap.docs.forEach(doc => {
+          cascadeBatch.update(doc.ref, {
+            name, detail, category, priority,
+            frequency: baseFreq, day, due
+          });
+          // Also update local cache
+          ['birbal','ajay','ambuj'].forEach(amId => {
+            const arr = allInstances[amId]||[];
+            const inst = arr.find(x=>x.id===doc.id);
+            if (inst) Object.assign(inst, {name,detail,category,priority,frequency:baseFreq,day,due});
+          });
+        });
+        await cascadeBatch.commit();
+      }
+    } catch(cascadeErr) {
+      console.warn('Instance cascade warning:', cascadeErr.message);
+    }
+
     taskLibrary.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
     renderTaskLibraryTable();
     populateMapTaskDropdown();
+    // Re-render AM boards so updated schedule labels appear immediately
+    try { renderAVPOverview(); renderTasksList(); } catch(e){}
+    try {
+      ['birbal','ajay','ambuj'].forEach(aid=>{
+        const el=document.getElementById('avp-'+aid);
+        if (el&&el.style.display!=='none') renderAMBoardAVP(aid);
+      });
+    } catch(e){}
     closeModal();
-    toast('✅ Task updated!','success');
+    toast('Task updated and synced to all instances!','success');
   } catch(err){ toast('Error: '+err.message,'error'); }
 }
 
