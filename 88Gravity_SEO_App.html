@@ -910,6 +910,10 @@ th.sortable.asc .sort-arrow,th.sortable.desc .sort-arrow{opacity:1;color:var(--m
       </div>
       <!-- MY TASKS VIEW -->
       <div id="am-mytasks" style="display:none">
+        <!-- Monthly Overview Stats -->
+        <div id="mt-overview" style="margin-bottom:16px"></div>
+        <!-- Day-of-week filter chips (Mon–Sun, current week) -->
+        <div id="mt-day-filter" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center"></div>
         <div class="filter-bar">
           <input class="search-input" id="mt-search" placeholder="🔍 Search..." oninput="renderMyTasks()">
           <div id="mt-proj-filters" style="display:flex;gap:6px;flex-wrap:wrap"></div>
@@ -2566,6 +2570,9 @@ async function initAM() {
   subscribeAMInstances();
   populateKBFilter();
   populateMTProjFilter();
+  buildMTDayFilter(); // pre-build day chips so they're ready
+  // Run auto-overdue after a short delay so Firestore snapshot has fired first
+  setTimeout(() => autoMarkDailyOverdue(), 2500);
 }
 
 function subscribeAMInstances() {
@@ -2576,6 +2583,7 @@ function subscribeAMInstances() {
     .where('periodKey','in',[dayK, wk, bwk, moK])
     .onSnapshot(snap => {
       myInstances = snap.docs.map(d=>({id:d.id,...d.data()}));
+      autoMarkDailyOverdue(); // silently upgrade stale tasks to Overdue
       renderAMToday();
       const activeTab = document.querySelector('.am-tab.active')?.textContent.trim();
       if (activeTab?.includes('My Tasks'))  renderMyTasks();
@@ -2737,15 +2745,153 @@ function onStatusChange(sel, id) {
 }
 
 // ── My Tasks View ──
+// Returns true if a task instance is relevant for a given weekday name
+function taskMatchesDay(t, day) {
+  const freq = t.frequency;
+  if (freq === 'daily') {
+    // "Every Day" tasks match every day; day-specific tasks match only their day
+    return (t.day || '').toLowerCase() === 'every day' || t.day === day;
+  }
+  if (freq === 'weekly') {
+    return t.day === day;
+  }
+  if (freq === 'biweekly') {
+    // biweekly day stored as "1st+3rd-Monday" → extract the weekday part
+    const m = (t.day||'').match(/-(\w+)$/);
+    return m ? m[1] === day : t.day === day;
+  }
+  // Monthly: always show regardless of day filter
+  return true;
+}
+
+// Render the stats overview bar at the top of My Tasks
+function renderMyTasksOverview() {
+  const el = document.getElementById('mt-overview');
+  if (!el) return;
+  const total    = myInstances.length;
+  const completed= myInstances.filter(t=>t.status==='Completed').length;
+  const inprog   = myInstances.filter(t=>t.status==='In Progress').length;
+  const overdue  = myInstances.filter(t=>t.status==='Overdue').length;
+  const pct      = total ? Math.round(completed/total*100) : 0;
+  const pctColor = pct>=80?'var(--green)':pct>=50?'var(--yellow)':'var(--orange)';
+  el.innerHTML =
+    '<div class="stats-row" style="margin-bottom:0">'
+    + '<div class="stat-box" style="border:2px solid #E8ECF2;border-top:3px solid var(--dark-blue);box-shadow:none"><div class="n" style="color:var(--dark-blue)">'+total+'</div><div class="l">Total Assigned</div></div>'
+    + '<div class="stat-box" style="border:2px solid #E8ECF2;border-top:3px solid var(--green);box-shadow:none"><div class="n" style="color:var(--green)">'+completed+'</div><div class="l">Completed</div></div>'
+    + '<div class="stat-box" style="border:2px solid #E8ECF2;border-top:3px solid var(--yellow);box-shadow:none"><div class="n" style="color:var(--yellow)">'+inprog+'</div><div class="l">In Progress</div></div>'
+    + '<div class="stat-box" style="border:2px solid #E8ECF2;border-top:3px solid var(--red);box-shadow:none"><div class="n" style="color:var(--red)">'+overdue+'</div><div class="l">Overdue</div></div>'
+    + '<div class="stat-box" style="border:2px solid #E8ECF2;border-top:3px solid var(--mid-blue);box-shadow:none"><div class="n" style="color:'+pctColor+'">'+pct+'%</div><div class="l">Completion Rate</div></div>'
+    + '</div>';
+}
+
+// Build day-of-week filter chips for the current Mon–Sun week
+function buildMTDayFilter() {
+  const el = document.getElementById('mt-day-filter');
+  if (!el || el.dataset.built === 'true') return; // build once per session
+  el.dataset.built = 'true';
+  const FULL = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  const SHORT= ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const today = new Date();
+  const dow   = today.getDay(); // 0=Sun
+  // Monday of current week
+  const mondayOffset = dow === 0 ? -6 : 1 - dow;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + mondayOffset);
+  // Today's index in 0=Mon array
+  const todayIdx = dow === 0 ? 6 : dow - 1;
+
+  let html = '<span style="font-size:11px;color:var(--muted);font-weight:700;margin-right:2px;white-space:nowrap">This Week:</span>';
+  FULL.forEach((fullDay, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    const dateNum = d.getDate();
+    const isToday = i === todayIdx;
+    html += '<button class="filter-chip mt-day-chip'+(isToday?' active':'')
+      +'" data-day="'+fullDay+'" onclick="toggleMTDayChip(this)" style="flex-direction:column;padding:5px 10px;line-height:1.2;min-width:44px;text-align:center'+(isToday?';background:var(--dark-blue);color:#fff':'')
+      +'"><span style="font-size:10px;font-weight:400;opacity:.75">'+dateNum+'</span><span style="font-size:11px;font-weight:700">'+SHORT[i]+'</span></button>';
+  });
+  html += '<button class="filter-chip" onclick="clearMTDayFilter()" style="padding:5px 12px;font-size:11px">All Days</button>';
+  el.innerHTML = html;
+}
+
+function toggleMTDayChip(el) {
+  const wasActive = el.classList.contains('active');
+  document.querySelectorAll('.mt-day-chip').forEach(c => {
+    c.classList.remove('active');
+    c.style.background = ''; c.style.color = '';
+  });
+  if (!wasActive) {
+    el.classList.add('active');
+    el.style.background = 'var(--dark-blue)'; el.style.color = '#fff';
+  }
+  renderMyTasks();
+}
+
+function clearMTDayFilter() {
+  document.querySelectorAll('.mt-day-chip').forEach(c => {
+    c.classList.remove('active'); c.style.background=''; c.style.color='';
+  });
+  // Re-highlight today
+  const today = new Date();
+  const dow = today.getDay();
+  const todayIdx = dow === 0 ? 6 : dow - 1;
+  const chips = document.querySelectorAll('.mt-day-chip');
+  if (chips[todayIdx]) { chips[todayIdx].style.background='var(--mid-blue)'; chips[todayIdx].style.color='#fff'; }
+  renderMyTasks();
+}
+
+// Auto-mark daily/weekly tasks as Overdue if their scheduled day has passed in the current week
+async function autoMarkDailyOverdue() {
+  const today  = new Date();
+  const todayKey = todayStr();
+  const dow    = today.getDay(); // 0=Sun,1=Mon,...,6=Sat
+  // Convert to 1=Mon…7=Sun
+  const todayDow = dow === 0 ? 7 : dow;
+
+  const toMark = myInstances.filter(t => {
+    if (t.status === 'Completed' || t.status === 'Overdue') return false;
+    if (t.frequency === 'daily') {
+      // Day-specific daily tasks: overdue if the instance's date is before today
+      if (t.day && t.day !== 'Every Day') {
+        return t.periodKey < todayKey;
+      }
+      return false; // "Every Day" tasks — only overdue at end of today
+    }
+    if (t.frequency === 'weekly' || t.frequency === 'biweekly') {
+      // Overdue if the task's scheduled weekday is earlier in the week than today
+      const taskDayName = t.frequency === 'biweekly'
+        ? ((t.day||'').match(/-(\w+)$/)||[])[1] || t.day
+        : t.day;
+      const taskDow = DAY_ORDER[(taskDayName||'').toLowerCase()] || 8;
+      return taskDow > 0 && taskDow < todayDow;
+    }
+    return false;
+  });
+
+  if (!toMark.length) return;
+  try {
+    const batch = db.batch();
+    toMark.forEach(t => batch.update(db.collection('taskInstances').doc(t.id), { status:'Overdue' }));
+    await batch.commit();
+    toMark.forEach(t => { t.status = 'Overdue'; });
+    console.log('Auto-marked '+toMark.length+' task(s) as Overdue');
+  } catch(e) { console.warn('autoMarkDailyOverdue:', e); }
+}
+
 function renderMyTasks() {
-  const search = document.getElementById('mt-search')?.value.toLowerCase()||'';
-  const freqF  = document.getElementById('mt-freq-filter')?.value||'';
+  renderMyTasksOverview();
+  buildMTDayFilter();
+
+  const search   = document.getElementById('mt-search')?.value.toLowerCase()||'';
+  const freqF    = document.getElementById('mt-freq-filter')?.value||'';
   const activeProjFilters = [...(document.querySelectorAll('.mt-proj-chip.active')||[])].map(c=>c.dataset.proj);
+  const activeDayFilter   = document.querySelector('.mt-day-chip.active')?.dataset.day || '';
 
   let inst = myInstances.filter(t =>
     (!search || t.name.toLowerCase().includes(search) || (t.detail||'').toLowerCase().includes(search)) &&
     (!freqF  || t.frequency === freqF) &&
-    (!activeProjFilters.length || activeProjFilters.includes(t.project))
+    (!activeProjFilters.length || activeProjFilters.includes(t.project)) &&
+    (!activeDayFilter || taskMatchesDay(t, activeDayFilter))
   );
 
   const groups = {daily:[],weekly:[],biweekly:[],monthly:[]};
@@ -3746,8 +3892,6 @@ async function saveEditTaskLib(id) {
 }
 
 // ================================================================
-// EDIT — TASK TEMPLATE (All Tasks — frequency / schedule)
-// ================================================================
 function openEditTemplate(id) {
   const t = allTemplates.find(x=>x.id===id);
   if (!t) return;
@@ -3836,7 +3980,7 @@ function openEditTemplate(id) {
       <select class="form-select" id="etp-due"><option value="">Select...</option><optgroup label="Specific Date">${dateOpts}</optgroup><optgroup label="Day Occurrence">${occOpts}</optgroup></select>
     </div>
     <div class="alert alert-info" style="font-size:11px;margin-top:4px">
-      ℹ️ Schedule changes apply from the <strong>next cycle</strong>. Existing instances are not modified.
+      &#x2139;&#xFE0F; Schedule changes apply from the <strong>next cycle</strong>. Existing instances are not modified.
     </div>
     <div style="display:flex;gap:10px;margin-top:16px">
       <button class="btn btn-primary" onclick="saveEditTemplate('${id}')">&#x1F4BE; Save Changes</button>
