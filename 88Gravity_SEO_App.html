@@ -712,12 +712,14 @@ th.sortable.asc .sort-arrow,th.sortable.desc .sort-arrow{opacity:1;color:var(--m
             <form id="maptask-form" onsubmit="submitMapTask(event)">
               <div class="form-row">
                 <label class="form-label">Select Task from Library *</label>
-                <select class="form-select" id="map-task-sel" required>
+                <select class="form-select" id="map-task-sel" required onchange="onMapTaskSelect()">
                   <option value="">Choose a task...</option>
                 </select>
               </div>
+              <!-- Auto-populated task preview -->
+              <div id="map-task-preview" style="display:none;background:var(--pale-blue);border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:12px;border-left:4px solid var(--mid-blue)"></div>
               <div class="form-row">
-                <label class="form-label">Additional Instructions (optional)</label>
+                <label class="form-label">Additional / Override Instructions <span style="font-size:10px;color:var(--muted)">(auto-filled from library, edit to override)</span></label>
                 <textarea class="form-textarea" id="map-detail" placeholder="Any project-specific notes for this assignment..."></textarea>
               </div>
               <div class="form-row-2">
@@ -768,9 +770,6 @@ th.sortable.asc .sort-arrow,th.sortable.desc .sort-arrow{opacity:1;color:var(--m
                 <label class="form-label">Filter by AM (optional)</label>
                 <select class="form-select" id="map-am-filter" onchange="populateMapProjectList()" style="max-width:260px">
                   <option value="">All AMs</option>
-                  <option value="birbal">Birbal Sharma</option>
-                  <option value="ajay">Ajay Kumar</option>
-                  <option value="ambuj">Ambuj Surothiya</option>
                 </select>
               </div>
               <div class="form-row">
@@ -3561,6 +3560,12 @@ async function deleteTaskLib(id) {
 function renderMapTasksView() {
   populateMapTaskDropdown();
   populateMapProjectList();
+  // Populate AM filter dynamically
+  const amSel = document.getElementById('map-am-filter');
+  if (amSel) {
+    amSel.innerHTML = '<option value="">All AMs</option>' +
+      Object.keys(AM_CONFIG).map(id => '<option value="'+id+'">'+AM_CONFIG[id].name+'</option>').join('');
+  }
 }
 
 function populateMapTaskDropdown() {
@@ -3568,6 +3573,71 @@ function populateMapTaskDropdown() {
   if (!sel) return;
   sel.innerHTML='<option value="">Choose a task...</option>'+
     taskLibrary.map(t=>'<option value="'+t.id+'">['+t.category+'] '+t.name+'</option>').join('');
+}
+
+// Auto-populate Map Tasks form when a task is selected from the library
+function onMapTaskSelect() {
+  const taskId = document.getElementById('map-task-sel')?.value;
+  const preview = document.getElementById('map-task-preview');
+  if (!taskId) { if (preview) preview.style.display='none'; return; }
+  const task = taskLibrary.find(t => t.id === taskId);
+  if (!task) return;
+
+  // Show preview card
+  if (preview) {
+    const freqLabel = task.frequency ? (task.frequency.charAt(0).toUpperCase()+task.frequency.slice(1)) : '';
+    const dayLabel  = task.day ? ' · '+task.day : task.due ? ' · '+task.due : '';
+    preview.style.display = 'block';
+    preview.innerHTML =
+      '<strong style="color:var(--dark-blue)">' + task.name + '</strong>'
+      + ' <span class="badge '+(CAT_CLASS[task.category]||'')+'" style="margin-left:6px">'+task.category+'</span>'
+      + (freqLabel ? ' <span class="freq-pill fp-'+task.frequency+'" style="margin-left:4px">'+freqLabel+dayLabel+'</span>' : '')
+      + (task.detail ? '<div style="color:var(--muted);margin-top:4px;line-height:1.5">'+task.detail+'</div>' : '');
+  }
+
+  // Auto-fill description (only if user hasn't typed anything)
+  const detailEl = document.getElementById('map-detail');
+  if (detailEl) detailEl.value = task.detail || '';
+
+  // Auto-fill frequency
+  const freqEl = document.getElementById('map-freq');
+  if (freqEl && task.frequency) {
+    let freqVal = '';
+    if (task.frequency === 'daily') {
+      const d = (task.day||'').toLowerCase().replace(/\s+/g,'-');
+      freqVal = (d===''||d==='every-day'||d==='everyday') ? 'daily-everyday' : 'daily-'+d;
+    } else {
+      freqVal = task.frequency;
+    }
+    const opt = [...freqEl.options].find(o => o.value === freqVal);
+    if (opt) { freqEl.value = freqVal; onMapFreqChange(); }
+  }
+
+  // Auto-fill weekly day
+  if (task.frequency === 'weekly' && task.day) {
+    const dayEl = document.getElementById('map-day');
+    if (dayEl) dayEl.value = task.day;
+  }
+
+  // Auto-fill biweekly occurrence + day
+  if (task.frequency === 'biweekly' && task.day) {
+    const m = (task.day||'').match(/^(1st\+3rd|2nd\+4th)-(\w+)$/i);
+    if (m) {
+      const occEl = document.getElementById('map-biw-occ');
+      const bdEl  = document.getElementById('map-biw-day');
+      if (occEl) occEl.value = m[1];
+      if (bdEl)  bdEl.value  = m[2];
+    }
+  }
+
+  // Auto-fill monthly due
+  if (task.frequency === 'monthly' && task.due) {
+    const dueEl = document.getElementById('map-due');
+    if (dueEl) {
+      const opt = [...dueEl.options].find(o => String(o.value) === String(task.due));
+      if (opt) dueEl.value = task.due;
+    }
+  }
 }
 
 function populateMapProjectList() {
@@ -3680,16 +3750,31 @@ async function submitMapTask(e) {
     allTemplates.push(template);
 
     if (document.getElementById('map-start').value==='now') {
+      // Directly write instances — bypasses periodInit so re-mapped tasks always appear immediately
+      const dayK=todayStr(), wk=weekKey(), moK=monthKey();
+      const periodKey = baseFreq==='daily' ? dayK : baseFreq==='weekly' ? wk : moK;
       for (const amId of [...assignedToAMs]) {
-        const projects=assignedToProjects[amId];
-        const batch=db.batch(); const initRef=db.collection('periodInit');
-        const dayK=todayStr(), wk=weekKey(), bwk=biWeekKey(), moK=monthKey();
-        if (baseFreq==='daily')    batch.delete(initRef.doc(amId+'-'+dayK));
-        if (baseFreq==='weekly')   batch.delete(initRef.doc(amId+'-'+wk));
-        if (baseFreq==='biweekly') batch.delete(initRef.doc(amId+'-'+bwk));
-        if (baseFreq==='monthly')  batch.delete(initRef.doc(amId+'-'+moK));
-        await batch.commit();
-        await ensureInstances(amId, projects, [template]);
+        const projects = assignedToProjects[amId];
+        // For day-specific daily tasks, only create instance if today is that day
+        const skipDay = (baseFreq==='daily' && day && day!=='Every Day' && day!==dayName());
+        if (skipDay) {
+          toast('ℹ️ Daily task for '+day+' will appear automatically on its next '+day+'.','success');
+          continue;
+        }
+        const instBatch = db.batch();
+        projects.forEach(proj => {
+          const instId = getInstanceId(docRef.id, amId, proj, baseFreq);
+          instBatch.set(db.collection('taskInstances').doc(instId), {
+            templateId: docRef.id, amId, project: proj,
+            name: template.name, detail: template.detail||'',
+            category: template.category||'', frequency: baseFreq,
+            day: day||'', due: due||'', priority: template.priority||'medium',
+            periodKey, calendarMonth: moK,
+            status: 'Not Started', notes: '', completedAt: null, updatedBy: null,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+        });
+        await instBatch.commit();
       }
     }
 
