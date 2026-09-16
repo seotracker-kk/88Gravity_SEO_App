@@ -1057,19 +1057,16 @@ const firebaseConfig = {
 // ================================================================
 // 2. ROLE MAP — maps email → role & AM info
 // ================================================================
+// ROLE_MAP: emergency fallback ONLY for admin/AVP accounts when Firestore is unreachable.
+// AMs are NOT listed here — they must authenticate via Firestore appUsers collection.
 const ROLE_MAP = {
-  "kuldeep@88gravity.com":       { role:"super_admin", name:"Kuldeep" },
-  "hubspot@88gravity.com":       { role:"avp",         name:"Hubspot Admin" },
-  "birbal@88gravity.com":        { role:"am",  name:"Birbal Sharma",   amId:"birbal" },
-  "ajay@88gravity.com":          { role:"am",  name:"Ajay Kumar",      amId:"ajay"   },
-  "ambujsurothiya@88gravity.com":{ role:"am",  name:"Ambuj Surothiya", amId:"ambuj"  },
+  "kuldeep@88gravity.com": { role:"super_admin", name:"Kuldeep" },
+  "hubspot@88gravity.com": { role:"avp",         name:"Hubspot Admin" },
 };
 
-const AM_CONFIG = {
-  birbal: { name:"Birbal Sharma",   email:"birbal@88gravity.com",        projects:Array.from({length:7}, (_,i)=>`Project ${i+1}`),  color:"linear-gradient(135deg,#1E3A5F,#2E86AB)" },
-  ajay:   { name:"Ajay Kumar",      email:"ajay@88gravity.com",           projects:Array.from({length:8}, (_,i)=>`Project ${i+1}`),  color:"linear-gradient(135deg,#148F77,#1ABC9C)" },
-  ambuj:  { name:"Ambuj Surothiya", email:"ambujsurothiya@88gravity.com", projects:Array.from({length:10},(_,i)=>`Project ${i+1}`), color:"linear-gradient(135deg,#8E44AD,#9B59B6)" },
-};
+// AM_CONFIG: starts empty — fully populated from Firestore via loadAMConfigs() at startup.
+// Do NOT hardcode AMs here; add/remove AMs through the Super Admin → Manage Users panel.
+const AM_CONFIG = {};
 
 const CAT_CLASS = { "Technical":"b-Technical","On-Page":"b-On-Page","Off-Page":"b-Off-Page","Analytics":"b-Analytics","Client":"b-Client","Research":"b-Research","AI-SEO":"b-AI-SEO","Reporting":"b-Reporting" };
 const STATUS_VALS = ["Not Started","In Progress","Completed","Overdue","Pending Review"];
