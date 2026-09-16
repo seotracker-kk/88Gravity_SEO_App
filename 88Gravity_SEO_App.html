@@ -903,12 +903,11 @@ function signInGoogle() {
   if (!auth) { toast("Firebase not loaded. Please refresh the page.", "error"); return; }
   const provider = new firebase.auth.GoogleAuthProvider();
   provider.setCustomParameters({ hd: "88gravity.com" });
-  auth.signInWithPopup(provider).catch(err => {
+  // Use redirect (no popup needed — works on all browsers without popup permission)
+  auth.signInWithRedirect(provider).catch(err => {
     console.error('Sign-in error:', err.code, err.message);
     if (err.code === 'auth/unauthorized-domain') {
-      toast("❌ Unauthorized domain. Go to Firebase Console → Authentication → Authorized Domains and add: " + location.hostname, "error");
-    } else if (err.code === 'auth/popup-blocked') {
-      toast("❌ Popup blocked by browser. Please allow popups for this site.", "error");
+      toast("❌ Unauthorized domain. Add this to Firebase → Authentication → Authorized Domains: " + location.hostname, "error");
     } else {
       toast("Sign-in failed: " + err.message, "error");
     }
@@ -920,6 +919,16 @@ function signOut() {
 }
 
 if (auth) {
+  // Handle redirect result after Google sign-in redirect
+  auth.getRedirectResult().catch(err => {
+    if (err.code && err.code !== 'auth/no-auth-event') {
+      console.error('Redirect result error:', err.code, err.message);
+      if (err.code === 'auth/unauthorized-domain') {
+        alert("❌ Unauthorized domain. Add '" + location.hostname + "' to Firebase → Authentication → Authorized Domains.");
+      }
+    }
+  });
+
   auth.onAuthStateChanged(async user => {
     _authFired = true;
     clearTimeout(_loaderTimeout);
