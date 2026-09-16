@@ -1505,7 +1505,7 @@ async function initAVP() {
   for (const amId of Object.keys(AM_CONFIG)) {
     const cfg = AM_CONFIG[amId];
     if (!cfg) continue;
-    const fsProjNames = allProjects.filter(p=>p.amId===amId).map(p=>p.name);
+    const fsProjNames = allProjects.filter(p=>p.amId===amId && p.status!=='paused').map(p=>p.name);
     const projsForAM  = fsProjNames.length ? fsProjNames : (cfg.projects||[]);
     await ensureInstances(amId, projsForAM, allTemplates);
   }
@@ -1976,8 +1976,8 @@ function renderAMBoardAVP(amId) {
   const pct = inst.length ? Math.round(done/inst.length*100) : 0;
   const pctColor = pct>=80?'var(--green)':pct>=50?'var(--yellow)':'var(--orange)';
 
-  const amProjList = allProjects.filter(p=>p.amId===amId).map(p=>p.name);
-  const projList = amProjList.length ? amProjList : cfg.projects;
+  const amProjList = allProjects.filter(p=>p.amId===amId && p.status!=='paused').map(p=>p.name);
+  const projList = amProjList.length ? amProjList : (cfg.projects||[]);
 
   // Header card with gradient (uses AM colour)
   const amColor = cfg.color || 'linear-gradient(135deg,var(--dark-blue),var(--mid-blue))';
@@ -1989,7 +1989,7 @@ function renderAMBoardAVP(amId) {
         <div style="width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.2);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;border:2px solid rgba(255,255,255,.4);flex-shrink:0">${initials}</div>
         <div>
           <div style="font-size:20px;font-weight:800;color:#fff;letter-spacing:-.2px">👤 ${cfg.name}</div>
-          <div style="font-size:12px;color:rgba(255,255,255,.75);margin-top:2px">${cfg.email} &nbsp;·&nbsp; ${projList.length} Projects &nbsp;·&nbsp; ${inst.length} tasks this period</div>
+          <div style="font-size:12px;color:rgba(255,255,255,.75);margin-top:2px">${cfg.email} &nbsp;·&nbsp; ${projList.length} Active Projects &nbsp;·&nbsp; ${inst.length} tasks this period</div>
         </div>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
@@ -2063,8 +2063,8 @@ function renderAMBoardAVP(amId) {
 
 function toggleProjDetail(amId, projIdx) {
   const cfg = AM_CONFIG[amId];
-  const amProjList2 = allProjects.filter(p=>p.amId===amId).map(p=>p.name);
-  const projList2 = amProjList2.length ? amProjList2 : cfg.projects;
+  const amProjList2 = allProjects.filter(p=>p.amId===amId && p.status!=='paused').map(p=>p.name);
+  const projList2 = amProjList2.length ? amProjList2 : (cfg.projects||[]);
   const proj = projList2[projIdx];
   const inst = allInstances[amId] || [];
   const tasks = inst.filter(t=>t.project===proj);
@@ -2409,8 +2409,8 @@ function renderReportByProject(instances, mk, el) {
     const ai = instances.filter(t=>t.amId===amId);
     if (!ai.length) return;
     // Build project list: Firestore projects first, then any instance projects not in that list
-    const fsProjNames2 = allProjects.filter(p=>p.amId===amId).map(p=>p.name);
-    const baseProjs = fsProjNames2.length ? fsProjNames2 : [...cfg.projects];
+    const fsProjNames2 = allProjects.filter(p=>p.amId===amId && p.status!=='paused').map(p=>p.name);
+    const baseProjs = fsProjNames2.length ? fsProjNames2 : [...(cfg.projects||[])];
     const extraProjs = [...new Set(ai.map(t=>t.project))].filter(p=>!baseProjs.includes(p));
     const reportProjs = [...baseProjs, ...extraProjs];
     html += `<div class="card"><div class="card-title">🧑‍💼 ${cfg.name} — Projects</div><div class="proj-summary-grid">`;
