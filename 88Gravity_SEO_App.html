@@ -1258,16 +1258,15 @@ function renderAMBoardAVP(amId) {
     const povr = tasks.filter(t=>t.status==='Overdue').length;
     const ppct = tasks.length ? Math.round(pdone/tasks.length*100) : 0;
     const pbar = ppct>=80?'var(--green)':ppct>=50?'var(--yellow)':ppct>0?'var(--orange)':'#BDC3C7';
+    const svcTags = (cfg.projectServices?.[proj] || [])
+      .map(s => {
+        const svcStyle = s==='SEO' ? 'background:#D6EAF8;color:#1a5276' :
+                         s==='GMB' ? 'background:#D5F5E3;color:#1e8449' :
+                                     'background:#EBD5F5;color:#6c3483';
+        return `<span style="${svcStyle};font-size:8px;padding:1px 5px;border-radius:6px;font-weight:700">${s}</span>`;
+      }).join('');
+    const projUrl = cfg.projectUrls?.[proj] || '';
     html += `
-      const svcTags = (cfg.projectServices?.[proj] || [])
-        .map(s => {
-          const svcStyle = s==='SEO' ? 'background:#D6EAF8;color:#1a5276' :
-                           s==='GMB' ? 'background:#D5F5E3;color:#1e8449' :
-                                       'background:#EBD5F5;color:#6c3483';
-          return `<span style="${svcStyle};font-size:8px;padding:1px 5px;border-radius:6px;font-weight:700">${s}</span>`;
-        }).join('');
-      const projUrl = cfg.projectUrls?.[proj] || '';
-      html += `
       <div class="proj-summary-card" id="psc-${amId}-${idx}" onclick="toggleProjDetail('${amId}',${idx})">
         <div class="proj-card-name" title="${proj}">📁 ${proj}</div>
         ${projUrl ? `<div style="font-size:9px;color:var(--mid-blue);margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${projUrl.replace('https://','').replace('http://','')}</div>` : ''}
