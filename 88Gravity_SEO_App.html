@@ -553,9 +553,6 @@ th.sortable.asc .sort-arrow,th.sortable.desc .sort-arrow{opacity:1;color:var(--m
                   <label class="form-label">Assigned AM *</label>
                   <select class="form-select" id="proj-am" required>
                     <option value="">Select Account Manager</option>
-                    <option value="birbal">Birbal Sharma</option>
-                    <option value="ajay">Ajay Kumar</option>
-                    <option value="ambuj">Ambuj Surothiya</option>
                   </select>
                 </div>
                 <div class="form-row">
@@ -751,7 +748,6 @@ th.sortable.asc .sort-arrow,th.sortable.desc .sort-arrow{opacity:1;color:var(--m
             <input class="search-input" id="tasks-search" placeholder="🔍 Search tasks..." oninput="filterTasksList()">
             <select class="form-select" id="tasks-filter-am" style="width:160px" onchange="filterTasksList()">
               <option value="">All AMs</option>
-              <option value="birbal">Birbal</option><option value="ajay">Ajay</option><option value="ambuj">Ambuj</option>
             </select>
             <select class="form-select" id="tasks-filter-freq" style="width:140px" onchange="filterTasksList()">
               <option value="">All Frequencies</option>
@@ -853,9 +849,6 @@ th.sortable.asc .sort-arrow,th.sortable.desc .sort-arrow{opacity:1;color:var(--m
               <div id="sa-amid-row" style="display:none;margin-bottom:14px">
                 <label class="form-label">AM Profile</label>
                 <select class="form-select" id="sa-new-amid" style="max-width:280px">
-                  <option value="birbal">Birbal Sharma</option>
-                  <option value="ajay">Ajay Kumar</option>
-                  <option value="ambuj">Ambuj Surothiya</option>
                 </select>
               </div>
               <button class="btn btn-primary" onclick="saAddUser()">Add User</button>
@@ -1505,6 +1498,7 @@ async function initAVP() {
 
   await seedDefaultUsers();
   await loadAMConfigs();
+  populateAMDropdowns();
   await loadTemplates();
   await loadProjects();
   await loadTaskLibrary();
@@ -1598,6 +1592,31 @@ async function loadAMConfigs() {
   }
   buildAMBoardsNav();
   buildAMBoardsContainer();
+}
+
+// Populate all hardcoded AM dropdowns dynamically from AM_CONFIG
+function populateAMDropdowns() {
+  const amIds = Object.keys(AM_CONFIG);
+
+  // #proj-am — project form
+  const projAmSel = document.getElementById('proj-am');
+  if (projAmSel) {
+    projAmSel.innerHTML = '<option value="">Select Account Manager</option>' +
+      amIds.map(id => `<option value="${id}">${AM_CONFIG[id].name || id}</option>`).join('');
+  }
+
+  // #tasks-filter-am — All Tasks filter bar
+  const tasksAmSel = document.getElementById('tasks-filter-am');
+  if (tasksAmSel) {
+    tasksAmSel.innerHTML = '<option value="">All AMs</option>' +
+      amIds.map(id => `<option value="${id}">${(AM_CONFIG[id].name || id).split(' ')[0]}</option>`).join('');
+  }
+
+  // #sa-new-amid — Super Admin add user AM profile
+  const saAmSel = document.getElementById('sa-new-amid');
+  if (saAmSel) {
+    saAmSel.innerHTML = amIds.map(id => `<option value="${id}">${AM_CONFIG[id].name || id}</option>`).join('');
+  }
 }
 
 // Inject per-AM nav items into sidebar
@@ -1775,7 +1794,7 @@ async function saveUser(docId) {
     }
     closeModal();
     await renderUsersTable();
-    if (role === 'am') { await loadAMConfigs(); }
+    if (role === 'am') { await loadAMConfigs(); populateAMDropdowns(); }
   } catch(e) {
     toast('Error saving user: '+e.message,'error');
   }
@@ -1788,7 +1807,7 @@ async function toggleUserActive(docId, active) {
     toast(active ? 'User activated ✅' : 'User deactivated', active ? 'success' : 'error');
     await renderUsersTable();
     // Rebuild AM nav if an AM was toggled
-    await loadAMConfigs();
+    await loadAMConfigs(); populateAMDropdowns();
   } catch(e) {
     toast('Error: '+e.message,'error');
   }
@@ -1870,19 +1889,21 @@ function renderAVPOverview() {
     <div class="stat-box" style="border-top-color:var(--mid-blue)"><div class="n" style="color:var(--mid-blue)">${pct}%</div><div class="l">Completion Rate</div></div>
   `;
 
-  // AM cards
+  // AM cards — use all loaded AMs, not a hardcoded list
   const grid = document.getElementById('avp-am-cards');
   grid.innerHTML = '';
-  ['birbal','ajay','ambuj'].forEach(amId => {
+  Object.keys(AM_CONFIG).forEach(amId => {
     const cfg  = AM_CONFIG[amId];
+    if (!cfg) return; // safety: skip if not loaded yet
     const inst = allInstances[amId] || [];
     const done = inst.filter(t=>t.status==='Completed').length;
     const ovr  = inst.filter(t=>t.status==='Overdue').length;
     const inp  = inst.filter(t=>t.status==='In Progress').length;
     const pct  = inst.length ? Math.round(done/inst.length*100) : 0;
+    const cardColor = cfg.color || 'linear-gradient(135deg,#1E3A5F,#2E86AB)';
     grid.innerHTML += `
       <div class="am-ov-card">
-        <div class="am-ov-head" style="background:${cfg.color}">
+        <div class="am-ov-head" style="background:${cardColor}">
           <div><div class="am-ov-name">🧑‍💼 ${cfg.name}</div><div class="am-ov-email">${cfg.email}</div></div>
           <div class="am-ov-pcount">${allProjects.filter(p=>p.amId===amId).length||cfg.projects.length} Projects</div>
         </div>
@@ -2134,7 +2155,7 @@ function populateTasksProjectFilter() {
   const curVal = sel.value;
   // Collect all distinct projects across all AMs
   const projs = [...new Set(
-    ['birbal','ajay','ambuj'].flatMap(amId => (allInstances[amId]||[]).map(t=>t.project||''))
+    Object.keys(AM_CONFIG).flatMap(amId => (allInstances[amId]||[]).map(t=>t.project||''))
       .filter(Boolean).sort()
   )];
   sel.innerHTML = '<option value="">All Projects</option>' +
@@ -2153,7 +2174,7 @@ function renderTasksList() {
   const container  = document.getElementById('tasks-instances-body');
 
   // Gather all instances across AMs
-  const amIds = amFilt ? [amFilt] : ['birbal','ajay','ambuj'];
+  const amIds = amFilt ? [amFilt] : Object.keys(AM_CONFIG);
   let allInst = amIds.flatMap(amId =>
     (allInstances[amId]||[]).map(t=>({...t, amId}))
   ).filter(t =>
@@ -2310,7 +2331,7 @@ async function loadAndRenderReportTab(tab, mk) {
   if (tab !== 'trend') {
     tabEl.innerHTML = `<div class="empty-state"><div class="icon">⏳</div><p>Loading data for this period...</p></div>`;
     let allInst = [];
-    for (const amId of ['birbal','ajay','ambuj']) {
+    for (const amId of Object.keys(AM_CONFIG)) {
       const inst = await queryInstancesForMonth(amId, mk);
       allInst.push(...inst);
     }
@@ -2338,8 +2359,9 @@ function renderReportOverview(instances, mk, el) {
   </div>`;
 
   html += `<div class="card"><div class="card-title">👥 AM Performance — ${mk}</div>`;
-  ['birbal','ajay','ambuj'].forEach(amId => {
+  Object.keys(AM_CONFIG).forEach(amId => {
     const cfg = AM_CONFIG[amId];
+    if (!cfg) return;
     const ai = instances.filter(t=>t.amId===amId);
     const ad = ai.filter(t=>t.status==='Completed').length;
     const ap = ai.length ? Math.round(ad/ai.length*100) : 0;
@@ -2358,8 +2380,9 @@ function renderReportOverview(instances, mk, el) {
 
 function renderReportByAM(instances, mk, el) {
   let html = '';
-  ['birbal','ajay','ambuj'].forEach(amId => {
+  Object.keys(AM_CONFIG).forEach(amId => {
     const cfg = AM_CONFIG[amId];
+    if (!cfg) return;
     const ai = instances.filter(t=>t.amId===amId);
     const done = ai.filter(t=>t.status==='Completed').length;
     const pct = ai.length ? Math.round(done/ai.length*100) : 0;
@@ -2383,8 +2406,9 @@ function renderReportByAM(instances, mk, el) {
 
 function renderReportByProject(instances, mk, el) {
   let html = '';
-  ['birbal','ajay','ambuj'].forEach(amId => {
+  Object.keys(AM_CONFIG).forEach(amId => {
     const cfg = AM_CONFIG[amId];
+    if (!cfg) return;
     const ai = instances.filter(t=>t.amId===amId);
     if (!ai.length) return;
     // Build project list: Firestore projects first, then any instance projects not in that list
@@ -2446,9 +2470,11 @@ async function renderTrendChart(el) {
     });
   }
 
-  const amColors = {birbal:'#2E86AB', ajay:'#1ABC9C', ambuj:'#9B59B6'};
+  const defaultColors = ['#2E86AB','#1ABC9C','#9B59B6','#E67E22','#E74C3C','#8E44AD','#16A085'];
+  const amColors = {};
+  Object.keys(AM_CONFIG).forEach((id, i) => { amColors[id] = AM_CONFIG[id]?.color || defaultColors[i % defaultColors.length]; });
   const trendData = {};
-  for (const amId of ['birbal','ajay','ambuj']) {
+  for (const amId of Object.keys(AM_CONFIG)) {
     trendData[amId] = {};
     for (const {key} of months) {
       const inst = await queryInstancesForMonth(amId, key);
@@ -2462,7 +2488,7 @@ async function renderTrendChart(el) {
     <div class="trend-wrap"><div class="trend-chart">`;
   months.forEach(({key, label}) => {
     html += `<div class="trend-bar-group">`;
-    ['birbal','ajay','ambuj'].forEach(amId => {
+    Object.keys(AM_CONFIG).forEach(amId => {
       const pct = trendData[amId][key]||0;
       const h = Math.max(pct*1.5, pct>0?6:2);
       const name = AM_CONFIG[amId].name.split(' ')[0];
@@ -2472,8 +2498,9 @@ async function renderTrendChart(el) {
   });
   html += `</div></div>
     <div class="trend-legend">`;
-  ['birbal','ajay','ambuj'].forEach(amId => {
-    html += `<div class="trend-legend-item"><div class="trend-legend-dot" style="background:${amColors[amId]}"></div><span>${AM_CONFIG[amId].name}</span></div>`;
+  Object.keys(AM_CONFIG).forEach(amId => {
+    const cfg = AM_CONFIG[amId]; if (!cfg) return;
+    html += `<div class="trend-legend-item"><div class="trend-legend-dot" style="background:${amColors[amId]}"></div><span>${cfg.name}</span></div>`;
   });
   html += `</div></div>`;
 
@@ -2481,8 +2508,9 @@ async function renderTrendChart(el) {
   html += `<div class="card"><div class="card-title">📊 Month-on-Month Data Table</div>
     <div class="table-wrap"><table>
     <thead><tr><th>AM</th>${months.map(m=>`<th style="text-align:center">${m.label}</th>`).join('')}</tr></thead><tbody>`;
-  ['birbal','ajay','ambuj'].forEach(amId => {
-    html += `<tr><td><strong>${AM_CONFIG[amId].name}</strong></td>`;
+  Object.keys(AM_CONFIG).forEach(amId => {
+    const cfg = AM_CONFIG[amId]; if (!cfg) return;
+    html += `<tr><td><strong>${cfg.name}</strong></td>`;
     months.forEach(({key}) => {
       const pct = trendData[amId][key];
       const bc = pct>=80?'var(--green)':pct>=50?'var(--yellow)':pct>0?'var(--orange)':'var(--muted)';
@@ -3383,7 +3411,7 @@ async function saveEditTaskInstance(id) {
     try { renderMyTasks(); } catch(e) {}
     try { renderTasksList(); } catch(e) {}
     try {
-      ['birbal','ajay','ambuj'].forEach(aid => {
+      Object.keys(AM_CONFIG).forEach(aid => {
         const boardEl = document.getElementById('avp-'+aid);
         if (boardEl && boardEl.style.display !== 'none') renderAMBoardAVP(aid);
       });
@@ -3479,7 +3507,7 @@ async function seedDefaultTasks() {
     {name:"Disavow File Review",       detail:"Review & update Google disavow file — add new toxic domains",                category:"Off-Page", frequency:"monthly",due:"Last Friday",  priority:"medium"},
   ];
 
-  const allAMs = ['birbal','ajay','ambuj'];
+  const allAMs = Object.keys(AM_CONFIG);
   const batch = db.batch();
   defaults.forEach(t => {
     const assignedToProjects = {};
