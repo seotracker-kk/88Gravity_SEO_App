@@ -581,7 +581,20 @@ th.sortable.asc .sort-arrow,th.sortable.desc .sort-arrow{opacity:1;color:var(--m
             </div>
             <!-- TABLE -->
             <div class="card">
-              <div class="card-title">📁 All Projects <span id="proj-count" style="font-size:11px;font-weight:400;color:var(--muted)"></span></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+                <div class="card-title" style="margin:0">📁 All Projects <span id="proj-count" style="font-size:11px;font-weight:400;color:var(--muted)"></span></div>
+                <div style="display:flex;gap:6px;align-items:center">
+                  <input type="text" id="proj-search" placeholder="🔍 Search..." oninput="renderProjectsList()" style="border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:12px;width:140px;background:var(--bg2);color:var(--text)">
+                  <select id="proj-status-filter" onchange="renderProjectsList()" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px;background:var(--bg2);color:var(--text)">
+                    <option value="">All Statuses</option>
+                    <option value="active">✅ Active</option>
+                    <option value="paused">⏸ Paused</option>
+                  </select>
+                  <select id="proj-am-filter" onchange="renderProjectsList()" style="border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px;background:var(--bg2);color:var(--text)">
+                    <option value="">All AMs</option>
+                  </select>
+                </div>
+              </div>
               <div class="table-wrap">
                 <table><thead><tr><th>Project Name</th><th>Website</th><th>AM</th><th>Service Types</th><th>Onboarded</th><th>Status</th><th></th></tr></thead>
                 <tbody id="projects-table-body"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">No projects yet.</td></tr></tbody>
@@ -3545,13 +3558,36 @@ function svcTagHtml(types) {
 function renderProjectsList() {
   const tbody = document.getElementById('projects-table-body');
   if (!tbody) return;
+
+  // Populate AM filter dropdown (once, keyed on AM count)
+  const amSel = document.getElementById('proj-am-filter');
+  if (amSel && amSel.options.length <= 1) {
+    Object.keys(AM_CONFIG).forEach(id => {
+      const o = document.createElement('option');
+      o.value = id; o.textContent = AM_CONFIG[id].name || id;
+      amSel.appendChild(o);
+    });
+  }
+
+  const search     = (document.getElementById('proj-search')?.value||'').toLowerCase();
+  const statusFilt = document.getElementById('proj-status-filter')?.value || '';
+  const amFilt     = document.getElementById('proj-am-filter')?.value || '';
+
+  let filtered = allProjects.filter(p => {
+    if (statusFilt && (p.status||'active') !== statusFilt) return false;
+    if (amFilt && p.amId !== amFilt) return false;
+    if (search && !(p.name||'').toLowerCase().includes(search) && !(p.url||'').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
   const cnt = document.getElementById('proj-count');
-  if (cnt) cnt.textContent = '(' + allProjects.length + ')';
-  if (!allProjects.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">No projects yet. Use the form to onboard your first project.</td></tr>';
+  if (cnt) cnt.textContent = `(${filtered.length} of ${allProjects.length})`;
+
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">No projects match the filter.</td></tr>';
     return;
   }
-  tbody.innerHTML = allProjects.map(p => {
+  tbody.innerHTML = filtered.map(p => {
     const amName = (p.amId && AM_CONFIG[p.amId]) ? AM_CONFIG[p.amId].name : (p.amId||'—');
     const urlDisplay = p.url ? `<a href="${p.url}" target="_blank" style="color:var(--mid-blue);font-size:11px;word-break:break-all">${p.url}</a>` : '—';
     const isPaused = p.status === 'paused';
