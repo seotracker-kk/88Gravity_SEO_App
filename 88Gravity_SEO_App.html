@@ -697,89 +697,48 @@ th.sortable.asc .sort-arrow,th.sortable.desc .sort-arrow{opacity:1;color:var(--m
 
         <!-- ===== MAP TASKS VIEW ===== -->
         <div id="avp-maptasks" class="avp-view" style="display:none">
-          <div class="page-header"><h1>🔗 Map Tasks to Projects</h1><p>Pick a task from your library, set its schedule, and assign it to one or more projects.</p></div>
-          <div class="card" style="max-width:700px">
+          <div class="page-header"><h1>🔗 Map Tasks to Projects</h1><p>Select multiple tasks, pick a manager &amp; their projects, and assign them all in one click.</p></div>
+          <div class="card" style="max-width:960px">
             <form id="maptask-form" onsubmit="submitMapTask(event)">
-              <div class="form-row">
-                <label class="form-label">Select Task from Library *</label>
-                <select class="form-select" id="map-task-sel" required onchange="onMapTaskSelect()">
-                  <option value="">Choose a task...</option>
-                </select>
-              </div>
-              <!-- Auto-populated task preview -->
-              <div id="map-task-preview" style="display:none;background:var(--pale-blue);border-radius:8px;padding:10px 14px;margin-bottom:8px;font-size:12px;border-left:4px solid var(--mid-blue)"></div>
-              <div class="form-row">
-                <label class="form-label">Additional / Override Instructions <span style="font-size:10px;color:var(--muted)">(auto-filled from library, edit to override)</span></label>
-                <textarea class="form-textarea" id="map-detail" placeholder="Any project-specific notes for this assignment..."></textarea>
-              </div>
-              <div class="form-row-2">
-                <div class="form-row">
-                  <label class="form-label">Frequency *</label>
-                  <select class="form-select" id="map-freq" onchange="onMapFreqChange()" required>
-                    <option value="">Select frequency</option>
-                    <option value="daily-everyday">Daily – Every Day</option>
-                    <option value="daily-monday">Daily – Monday only</option>
-                    <option value="daily-tuesday">Daily – Tuesday only</option>
-                    <option value="daily-wednesday">Daily – Wednesday only</option>
-                    <option value="daily-thursday">Daily – Thursday only</option>
-                    <option value="daily-friday">Daily – Friday only</option>
-                    <option value="daily-saturday">Daily – Saturday only</option>
-                    <option value="weekly">Weekly (pick day below)</option>
-                    <option value="biweekly">Biweekly (pick occurrence below)</option>
-                    <option value="monthly">Monthly (pick date below)</option>
-                  </select>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+
+                <!-- LEFT: Task Selection -->
+                <div>
+                  <div class="form-label" style="margin-bottom:6px">📋 Select Tasks from Library * <span id="map-task-count" style="font-size:11px;color:var(--mid-blue);font-weight:600"></span></div>
+                  <input type="text" id="map-task-search" placeholder="🔍 Search tasks..." oninput="filterMapTaskList()"
+                    style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:13px;margin-bottom:6px">
+                  <div id="map-task-list" style="max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;background:var(--bg2);padding:4px 0">
+                    <div style="padding:10px;color:var(--muted);font-size:12px">Loading tasks…</div>
+                  </div>
+                  <div id="map-task-tags" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px"></div>
                 </div>
-                <div class="form-row" id="map-day-row" style="display:none">
-                  <label class="form-label">Day of Week</label>
-                  <select class="form-select" id="map-day">
-                    <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
-                    <option>Thursday</option><option>Friday</option><option>Saturday</option>
+
+                <!-- RIGHT: Project Selection -->
+                <div>
+                  <div class="form-label" style="margin-bottom:6px">🏢 Select Projects to Assign *</div>
+                  <select class="form-select" id="map-am-filter" onchange="populateMapProjectList()" style="margin-bottom:8px">
+                    <option value="">All AMs</option>
                   </select>
-                </div>
-              </div>
-              <div class="form-row-2" id="map-biw-row" style="display:none">
-                <div class="form-row">
-                  <label class="form-label">Occurrence</label>
-                  <select class="form-select" id="map-biw-occ">
-                    <option value="1st+3rd">1st &amp; 3rd</option><option value="2nd+4th">2nd &amp; 4th</option>
-                  </select>
-                </div>
-                <div class="form-row">
-                  <label class="form-label">Day of Week</label>
-                  <select class="form-select" id="map-biw-day">
-                    <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
-                    <option>Thursday</option><option>Friday</option><option>Saturday</option>
-                  </select>
-                </div>
-              </div>
-              <div class="form-row" id="map-due-row" style="display:none">
-                <label class="form-label">Monthly Schedule *</label>
-                <select class="form-select" id="map-due"><option value="">Select date/timing...</option></select>
-              </div>
-              <div class="form-row">
-                <label class="form-label">Filter by AM (optional)</label>
-                <select class="form-select" id="map-am-filter" onchange="populateMapProjectList()" style="max-width:260px">
-                  <option value="">All AMs</option>
-                </select>
-              </div>
-              <div class="form-row">
-                <label class="form-label">Select Projects to Assign *</label>
-                <div id="map-projects-container" style="margin-top:6px">
-                  <div style="font-size:12px;color:var(--muted);padding:10px;background:var(--pale-blue);border-radius:8px">
-                    ℹ️ Onboard projects first in the <strong>Projects</strong> section.
+                  <div id="map-projects-container" style="max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;background:var(--bg2);padding:4px 0">
+                    <div style="padding:10px;color:var(--muted);font-size:12px">ℹ️ Onboard projects in the <strong>Projects</strong> section first.</div>
                   </div>
                 </div>
               </div>
-              <div class="form-row">
+
+              <!-- Start From -->
+              <div class="form-row" style="margin-top:16px;max-width:300px">
                 <label class="form-label">Start From</label>
-                <select class="form-select" id="map-start" style="max-width:280px">
+                <select class="form-select" id="map-start">
                   <option value="now">Immediately (current cycle)</option>
                   <option value="next">Next cycle (next week/month)</option>
                 </select>
               </div>
-              <div style="display:flex;gap:10px;margin-top:8px">
-                <button type="submit" class="btn btn-primary" id="map-submit-btn">🔗 Map Task</button>
+
+              <!-- Submit -->
+              <div style="display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap">
+                <button type="submit" class="btn btn-primary" id="map-submit-btn">🔗 Map Tasks to Projects</button>
                 <button type="button" class="btn btn-outline" onclick="resetMapForm()">Clear</button>
+                <span id="map-summary-label" style="font-size:12px;color:var(--muted)"></span>
               </div>
             </form>
           </div>
@@ -3742,88 +3701,115 @@ async function deleteTaskLib(id) {
 }
 
 // ================================================================
-// MAP TASKS MODULE
+// MAP TASKS MODULE  (Bulk assignment)
 // ================================================================
+let _selectedMapTaskIds = new Set();
+
 function renderMapTasksView() {
-  populateMapTaskDropdown();
-  populateMapProjectList();
-  // Populate AM filter dynamically
+  _selectedMapTaskIds = new Set();
+  // Populate AM filter
   const amSel = document.getElementById('map-am-filter');
   if (amSel) {
     amSel.innerHTML = '<option value="">All AMs</option>' +
       Object.keys(AM_CONFIG).map(id => '<option value="'+id+'">'+AM_CONFIG[id].name+'</option>').join('');
   }
+  _renderMapTaskList('');
+  populateMapProjectList();
+  _updateMapSummary();
 }
 
-function populateMapTaskDropdown() {
-  const sel=document.getElementById('map-task-sel');
-  if (!sel) return;
-  sel.innerHTML='<option value="">Choose a task...</option>'+
-    taskLibrary.map(t=>'<option value="'+t.id+'">['+t.category+'] '+t.name+'</option>').join('');
+function _renderMapTaskList(filter) {
+  const list = document.getElementById('map-task-list');
+  if (!list) return;
+  const tasks = filter
+    ? taskLibrary.filter(t => (t.name||'').toLowerCase().includes(filter.toLowerCase()) ||
+        (t.category||'').toLowerCase().includes(filter.toLowerCase()))
+    : taskLibrary;
+  if (!tasks.length) {
+    list.innerHTML = '<div style="padding:10px;color:var(--muted);font-size:12px">No tasks in library. Add tasks via Task Library first.</div>';
+    return;
+  }
+  const allChecked = tasks.every(t => _selectedMapTaskIds.has(t.id));
+  list.innerHTML =
+    `<label class="cb-item" style="padding:6px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600">
+      <input type="checkbox" id="map-task-all" ${allChecked?'checked':''} onchange="toggleAllMapTasks()"> ✅ Select All (${tasks.length})
+    </label>` +
+    tasks.map(t => {
+      const freqLabel = t.frequency ? t.frequency.charAt(0).toUpperCase()+t.frequency.slice(1) : '';
+      const dayLabel  = t.day && t.day !== 'Every Day' ? ' · '+t.day : '';
+      const checked   = _selectedMapTaskIds.has(t.id) ? 'checked' : '';
+      return `<label class="cb-item" style="padding:6px 10px;display:flex;align-items:flex-start;gap:8px;cursor:pointer">
+        <input type="checkbox" class="map-task-opt" value="${t.id}" ${checked} onchange="toggleMapTaskOpt('${t.id}',this)" style="margin-top:3px">
+        <span>
+          <strong style="font-size:12px">${t.name}</strong>
+          <span style="margin-left:6px" class="badge ${CAT_CLASS[t.category]||''}">${t.category||''}</span>
+          ${freqLabel ? `<span class="freq-pill fp-${t.frequency}" style="margin-left:4px;font-size:10px">${freqLabel}${dayLabel}</span>` : ''}
+        </span>
+      </label>`;
+    }).join('');
 }
 
-// Auto-populate Map Tasks form when a task is selected from the library
-function onMapTaskSelect() {
-  const taskId = document.getElementById('map-task-sel')?.value;
-  const preview = document.getElementById('map-task-preview');
-  if (!taskId) { if (preview) preview.style.display='none'; return; }
-  const task = taskLibrary.find(t => t.id === taskId);
-  if (!task) return;
+function filterMapTaskList() {
+  const q = document.getElementById('map-task-search')?.value || '';
+  _renderMapTaskList(q);
+}
 
-  // Show preview card
-  if (preview) {
-    const freqLabel = task.frequency ? (task.frequency.charAt(0).toUpperCase()+task.frequency.slice(1)) : '';
-    const dayLabel  = task.day ? ' · '+task.day : task.due ? ' · '+task.due : '';
-    preview.style.display = 'block';
-    preview.innerHTML =
-      '<strong style="color:var(--dark-blue)">' + task.name + '</strong>'
-      + ' <span class="badge '+(CAT_CLASS[task.category]||'')+'" style="margin-left:6px">'+task.category+'</span>'
-      + (freqLabel ? ' <span class="freq-pill fp-'+task.frequency+'" style="margin-left:4px">'+freqLabel+dayLabel+'</span>' : '')
-      + (task.detail ? '<div style="color:var(--muted);margin-top:4px;line-height:1.5">'+task.detail+'</div>' : '');
-  }
+function toggleMapTaskOpt(taskId, cb) {
+  if (cb.checked) _selectedMapTaskIds.add(taskId);
+  else _selectedMapTaskIds.delete(taskId);
+  const allOpts = [...document.querySelectorAll('.map-task-opt')];
+  const allChk  = document.getElementById('map-task-all');
+  if (allChk) allChk.checked = allOpts.length > 0 && allOpts.every(o => o.checked);
+  _renderMapTaskTags();
+  _updateMapSummary();
+}
 
-  // Auto-fill description (only if user hasn't typed anything)
-  const detailEl = document.getElementById('map-detail');
-  if (detailEl) detailEl.value = task.detail || '';
+function toggleAllMapTasks() {
+  const chk = document.getElementById('map-task-all').checked;
+  document.querySelectorAll('.map-task-opt').forEach(cb => {
+    cb.checked = chk;
+    if (chk) _selectedMapTaskIds.add(cb.value);
+    else _selectedMapTaskIds.delete(cb.value);
+  });
+  _renderMapTaskTags();
+  _updateMapSummary();
+}
 
-  // Auto-fill frequency
-  const freqEl = document.getElementById('map-freq');
-  if (freqEl && task.frequency) {
-    let freqVal = '';
-    if (task.frequency === 'daily') {
-      const d = (task.day||'').toLowerCase().replace(/\s+/g,'-');
-      freqVal = (d===''||d==='every-day'||d==='everyday') ? 'daily-everyday' : 'daily-'+d;
-    } else {
-      freqVal = task.frequency;
-    }
-    const opt = [...freqEl.options].find(o => o.value === freqVal);
-    if (opt) { freqEl.value = freqVal; onMapFreqChange(); }
-  }
+function _renderMapTaskTags() {
+  const el = document.getElementById('map-task-tags');
+  const cntEl = document.getElementById('map-task-count');
+  if (!el) return;
+  if (cntEl) cntEl.textContent = _selectedMapTaskIds.size ? `(${_selectedMapTaskIds.size} selected)` : '';
+  if (!_selectedMapTaskIds.size) { el.innerHTML = ''; return; }
+  el.innerHTML = [..._selectedMapTaskIds].map(id => {
+    const t = taskLibrary.find(x => x.id === id);
+    const label = t ? t.name : id;
+    return `<span class="multisel-tag" style="display:inline-flex;align-items:center;gap:4px;font-size:11px">${label}
+      <span onclick="removeMapTaskTag('${id}')" style="cursor:pointer;font-size:14px;line-height:1">×</span></span>`;
+  }).join('');
+}
 
-  // Auto-fill weekly day
-  if (task.frequency === 'weekly' && task.day) {
-    const dayEl = document.getElementById('map-day');
-    if (dayEl) dayEl.value = task.day;
-  }
+function removeMapTaskTag(taskId) {
+  _selectedMapTaskIds.delete(taskId);
+  const cb = document.querySelector(`.map-task-opt[value="${taskId}"]`);
+  if (cb) cb.checked = false;
+  const allChk = document.getElementById('map-task-all');
+  if (allChk) allChk.checked = false;
+  _renderMapTaskTags();
+  _updateMapSummary();
+}
 
-  // Auto-fill biweekly occurrence + day
-  if (task.frequency === 'biweekly' && task.day) {
-    const m = (task.day||'').match(/^(1st\+3rd|2nd\+4th)-(\w+)$/i);
-    if (m) {
-      const occEl = document.getElementById('map-biw-occ');
-      const bdEl  = document.getElementById('map-biw-day');
-      if (occEl) occEl.value = m[1];
-      if (bdEl)  bdEl.value  = m[2];
-    }
-  }
-
-  // Auto-fill monthly due
-  if (task.frequency === 'monthly' && task.due) {
-    const dueEl = document.getElementById('map-due');
-    if (dueEl) {
-      const opt = [...dueEl.options].find(o => String(o.value) === String(task.due));
-      if (opt) dueEl.value = task.due;
-    }
+function _updateMapSummary() {
+  const lbl = document.getElementById('map-summary-label');
+  if (!lbl) return;
+  const taskCount = _selectedMapTaskIds.size;
+  const projCount = document.querySelectorAll('.map-proj-cb:checked').length;
+  if (taskCount && projCount) {
+    lbl.textContent = `→ Will create ${taskCount} task${taskCount>1?'s':''} × ${projCount} project${projCount>1?'s':''} = ${taskCount*projCount} assignment${taskCount*projCount>1?'s':''}`;
+    lbl.style.color = 'var(--mid-blue)';
+  } else {
+    lbl.textContent = taskCount ? `${taskCount} task${taskCount>1?'s':''} selected — now pick projects →` : '';
+    lbl.style.color = 'var(--muted)';
   }
 }
 
@@ -3831,27 +3817,30 @@ function populateMapProjectList() {
   const container=document.getElementById('map-projects-container');
   if (!container) return;
   const amFilt=document.getElementById('map-am-filter')?.value||'';
-  let projs=allProjects;
+  let projs = allProjects.filter(p => p.status !== 'paused');
   if (amFilt) projs=projs.filter(p=>p.amId===amFilt);
   if (!projs.length) {
-    container.innerHTML='<div style="font-size:12px;color:var(--muted);padding:10px;background:var(--pale-blue);border-radius:8px">'+
-      (allProjects.length ? 'No projects found for selected AM.' : 'ℹ️ No projects yet — onboard projects in the <strong>Projects</strong> section first.')+'</div>';
+    container.innerHTML='<div style="font-size:12px;color:var(--muted);padding:10px">'+
+      (allProjects.length ? 'No active projects for this AM.' : 'ℹ️ No projects yet — onboard projects in the <strong>Projects</strong> section first.')+'</div>';
     return;
   }
   container.innerHTML =
-    '<div style="margin-bottom:8px"><label class="cb-item" style="display:inline-flex;width:auto">'+
-    '<input type="checkbox" id="map-all-projs" onchange="selectAllMapProjects()"> ✅ Select All Visible</label></div>'+
-    '<div class="checkbox-group" id="map-proj-checks">'+
+    `<label class="cb-item" style="padding:6px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600">
+      <input type="checkbox" id="map-all-projs" onchange="selectAllMapProjects()"> ✅ Select All (${projs.length})
+    </label>` +
     projs.map(p=>{
-      const amN=(p.amId&&AM_CONFIG[p.amId])?AM_CONFIG[p.amId].name.split(' ')[0]:p.amId||'';
-      return '<label class="cb-item"><input type="checkbox" class="map-proj-cb" value="'+p.id+'" data-name="'+p.name+'" data-am="'+p.amId+'"> '+
-        p.name+' <span style="font-size:10px;color:var(--muted);margin-left:4px">'+amN+'</span></label>';
-    }).join('')+'</div>';
+      const amN=(p.amId&&AM_CONFIG[p.amId])?AM_CONFIG[p.amId].name:'';
+      return `<label class="cb-item" style="padding:6px 10px;display:flex;align-items:center;gap:8px;cursor:pointer" onchange="_updateMapSummary()">
+        <input type="checkbox" class="map-proj-cb" value="${p.id}" data-name="${p.name}" data-am="${p.amId}">
+        <span><strong style="font-size:12px">${p.name}</strong> <span style="font-size:11px;color:var(--muted)">${amN}</span></span>
+      </label>`;
+    }).join('');
 }
 
 function selectAllMapProjects() {
   const c=document.getElementById('map-all-projs').checked;
   document.querySelectorAll('.map-proj-cb').forEach(cb=>cb.checked=c);
+  _updateMapSummary();
 }
 
 function onTlibFreqChange() {
@@ -3867,19 +3856,22 @@ function resetTlibForm() {
   document.getElementById('tlib-due-row').style.display='none';
 }
 
-function onMapFreqChange() {
-  const freq=document.getElementById('map-freq').value;
-  document.getElementById('map-day-row').style.display = freq==='weekly'   ? 'block' : 'none';
-  document.getElementById('map-biw-row').style.display = freq==='biweekly' ? 'grid'  : 'none';
-  document.getElementById('map-due-row').style.display = freq==='monthly'  ? 'block' : 'none';
-}
 
 function resetMapForm() {
-  document.getElementById('maptask-form').reset();
-  document.getElementById('map-day-row').style.display='none';
-  document.getElementById('map-biw-row').style.display='none';
-  document.getElementById('map-due-row').style.display='none';
+  _selectedMapTaskIds = new Set();
+  const srch = document.getElementById('map-task-search');
+  if (srch) srch.value = '';
+  _renderMapTaskList('');
+  _renderMapTaskTags();
+  document.querySelectorAll('.map-proj-cb').forEach(cb => cb.checked = false);
+  const allProjCb = document.getElementById('map-all-projs');
+  if (allProjCb) allProjCb.checked = false;
+  const amFilt = document.getElementById('map-am-filter');
+  if (amFilt) amFilt.value = '';
   populateMapProjectList();
+  const startEl = document.getElementById('map-start');
+  if (startEl) startEl.value = 'now';
+  _updateMapSummary();
 }
 
 async function submitMapTask(e) {
@@ -3888,24 +3880,12 @@ async function submitMapTask(e) {
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Mapping...';
 
   try {
-    const taskId=document.getElementById('map-task-sel').value;
-    const task=taskLibrary.find(t=>t.id===taskId);
-    if (!task) { toast('Select a task first','error'); return; }
-
+    // Validate selections
+    if (!_selectedMapTaskIds.size) { toast('Select at least one task from the library','error'); btn.disabled=false; btn.innerHTML='🔗 Map Tasks to Projects'; return; }
     const selCbs=[...document.querySelectorAll('.map-proj-cb:checked')];
-    if (!selCbs.length) { toast('Select at least one project','error'); return; }
+    if (!selCbs.length) { toast('Select at least one project','error'); btn.disabled=false; btn.innerHTML='🔗 Map Tasks to Projects'; return; }
 
-    const freq=document.getElementById('map-freq').value;
-    if (!freq) { toast('Please select a frequency','error'); return; }
-    const baseFreq=freq.startsWith('daily')?'daily':freq;
-    const day=freq.startsWith('daily-')
-      ? freq.split('daily-')[1].charAt(0).toUpperCase()+freq.split('daily-')[1].slice(1)
-      : freq==='weekly'   ? (document.getElementById('map-day')?.value||'Monday')
-      : freq==='biweekly' ? ((document.getElementById('map-biw-occ')?.value||'1st+3rd')+'-'+(document.getElementById('map-biw-day')?.value||'Monday'))
-      : 'Every Day';
-    const due = freq==='monthly' ? (document.getElementById('map-due')?.value||'') : '';
-
-    // Group by AM
+    // Build AM → [projectNames] mapping from selected projects
     const assignedToAMs=new Set();
     const assignedToProjects={};
     selCbs.forEach(cb => {
@@ -3916,62 +3896,73 @@ async function submitMapTask(e) {
       assignedToProjects[proj.amId].push(proj.name);
     });
 
-    const template={
-      name:              task.name,
-      detail:            document.getElementById('map-detail').value.trim() || task.detail||'',
-      category:          task.category,
-      priority:          task.priority,
-      taskLibraryId:     taskId,
-      frequency:         baseFreq,
-      day,
-      due,
-      assignedToAMs:     [...assignedToAMs],
-      assignedToProjects,
-      active:            true,
-      createdBy:         currentUser.uid,
-      createdAt:         firebase.firestore.FieldValue.serverTimestamp(),
-    };
+    const startNow = document.getElementById('map-start').value === 'now';
+    const dayK=todayStr(), wk=weekKey(), moK=monthKey();
 
-    const docRef=await db.collection('taskTemplates').add(template);
-    template.id=docRef.id;
-    allTemplates.push(template);
+    let createdCount = 0;
+    // Iterate over each selected task
+    for (const taskId of [..._selectedMapTaskIds]) {
+      const task = taskLibrary.find(t => t.id === taskId);
+      if (!task) continue;
 
-    if (document.getElementById('map-start').value==='now') {
-      // Directly write instances — bypasses periodInit so re-mapped tasks always appear immediately
-      const dayK=todayStr(), wk=weekKey(), moK=monthKey();
-      const periodKey = baseFreq==='daily' ? dayK : baseFreq==='weekly' ? wk : moK;
-      for (const amId of [...assignedToAMs]) {
-        const projects = assignedToProjects[amId];
-        // For day-specific daily tasks, only create instance if today is that day
-        const skipDay = (baseFreq==='daily' && day && day!=='Every Day' && day!==dayName());
-        if (skipDay) {
-          toast('ℹ️ Daily task for '+day+' will appear automatically on its next '+day+'.','success');
-          continue;
+      // Use library-defined frequency
+      const baseFreq = task.frequency || 'weekly';
+      const day = task.day || 'Monday';
+      const due = task.due || '';
+
+      const template={
+        name:              task.name,
+        detail:            task.detail||'',
+        category:          task.category,
+        priority:          task.priority,
+        taskLibraryId:     taskId,
+        frequency:         baseFreq,
+        day,
+        due,
+        assignedToAMs:     [...assignedToAMs],
+        assignedToProjects,
+        selectedProjectIds: selCbs.map(cb=>cb.value),
+        active:            true,
+        createdBy:         currentUser.uid,
+        createdAt:         firebase.firestore.FieldValue.serverTimestamp(),
+      };
+
+      const docRef=await db.collection('taskTemplates').add(template);
+      template.id=docRef.id;
+      allTemplates.push(template);
+      createdCount++;
+
+      if (startNow) {
+        const periodKey = baseFreq==='daily' ? dayK : baseFreq==='weekly' ? wk : moK;
+        for (const amId of [...assignedToAMs]) {
+          const projects = assignedToProjects[amId];
+          const skipDay = (baseFreq==='daily' && day && day!=='Every Day' && day!==dayName());
+          if (skipDay) continue;
+          const instBatch = db.batch();
+          projects.forEach(proj => {
+            const instId = getInstanceId(docRef.id, amId, proj, baseFreq);
+            instBatch.set(db.collection('taskInstances').doc(instId), {
+              templateId: docRef.id, amId, project: proj,
+              name: template.name, detail: template.detail||'',
+              category: template.category||'', frequency: baseFreq,
+              day: day||'', due: due||'', priority: template.priority||'medium',
+              periodKey, calendarMonth: moK,
+              status: 'Not Started', notes: '', completedAt: null, updatedBy: null,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+          });
+          await instBatch.commit();
         }
-        const instBatch = db.batch();
-        projects.forEach(proj => {
-          const instId = getInstanceId(docRef.id, amId, proj, baseFreq);
-          instBatch.set(db.collection('taskInstances').doc(instId), {
-            templateId: docRef.id, amId, project: proj,
-            name: template.name, detail: template.detail||'',
-            category: template.category||'', frequency: baseFreq,
-            day: day||'', due: due||'', priority: template.priority||'medium',
-            periodKey, calendarMonth: moK,
-            status: 'Not Started', notes: '', completedAt: null, updatedBy: null,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-          }, { merge: true });
-        });
-        await instBatch.commit();
       }
     }
 
     const projNames=selCbs.map(cb=>cb.dataset.name).join(', ');
-    toast('✅ "'+task.name+'" mapped to: '+projNames,'success');
+    toast(`✅ ${createdCount} task${createdCount>1?'s':''} mapped to: ${projNames}`,'success');
     resetMapForm();
     renderTasksList();
     renderAVPOverview();
   } catch(err) { toast('Error: '+err.message,'error'); }
-  btn.disabled=false; btn.innerHTML='🔗 Map Task';
+  btn.disabled=false; btn.innerHTML='🔗 Map Tasks to Projects';
 }
 
 // ================================================================
