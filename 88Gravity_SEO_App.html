@@ -342,6 +342,17 @@ th.sortable.asc .sort-arrow,th.sortable.desc .sort-arrow{opacity:1;color:var(--m
   .kanban-board{grid-template-columns:1fr}
   .form-row-2{grid-template-columns:1fr}
 }
+/* ── SUPER ADMIN ─────────────────────── */
+.sa-tab{background:#fff;border:2px solid #E9ECF0;border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;transition:all .2s}
+.sa-tab:hover{border-color:var(--orange);color:var(--orange)}
+.sa-tab.active{background:var(--orange);border-color:var(--orange);color:#fff}
+.sa-panel{display:none}
+.sa-panel.active{display:block}
+.role-chip{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700}
+.rc-super_admin{background:#FFD700;color:#5a3e00}
+.rc-avp{background:#BDD5EA;color:#1a5276}
+.rc-am{background:#D1F2EB;color:#0e6655}
+.audit-chip{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700}
 </style>
 </head>
 <body>
@@ -398,6 +409,8 @@ th.sortable.asc .sort-arrow,th.sortable.desc .sort-arrow{opacity:1;color:var(--m
           <div id="am-boards-nav"><!-- AM board links injected dynamically --></div>
           <div class="nav-item" onclick="avpNav('reports',this)"><span class="nav-icon">📈</span>Reports</div>
           <div class="nav-item" onclick="avpNav('users',this)"><span class="nav-icon">👥</span>Manage Users</div>
+          <div style="height:1px;background:rgba(255,255,255,.1);margin:8px 18px"></div>
+          <div class="nav-item" id="sa-nav-btn" style="display:none;color:#FFD700" onclick="avpNav('superadmin',this)"><span class="nav-icon">⚙️</span>Super Admin</div>
         </div>
         <div class="sidebar-footer">
           <button class="btn-logout" onclick="signOut()">⬅ Sign Out</button>
@@ -872,6 +885,114 @@ th.sortable.asc .sort-arrow,th.sortable.desc .sort-arrow{opacity:1;color:var(--m
           <div id="report-tab-bycategory" style="display:none"></div>
           <div id="report-tab-trend" style="display:none"></div>
         </div>
+
+        <!-- ===== SUPER ADMIN PANEL ===== -->
+        <div id="avp-superadmin" class="avp-view" style="display:none">
+          <div class="page-header">
+            <h1>⚙️ Super Admin Panel</h1>
+            <p>Manage users, task templates, system settings, and activity logs.</p>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">
+            <button class="sa-tab active" id="sa-tab-users"     onclick="switchSATab('users',this)">👥 User Management</button>
+            <button class="sa-tab"        id="sa-tab-templates" onclick="switchSATab('templates',this)">📋 Task Templates</button>
+            <button class="sa-tab"        id="sa-tab-settings"  onclick="switchSATab('settings',this)">⚙️ System Settings</button>
+            <button class="sa-tab"        id="sa-tab-audit"     onclick="switchSATab('audit',this)">📜 Audit Log</button>
+          </div>
+
+          <!-- USER MANAGEMENT -->
+          <div id="sa-users" class="sa-panel active">
+            <div class="card">
+              <div class="card-title">➕ Add New User</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px">
+                <div><label class="form-label">Full Name</label><input class="form-control" id="sa-new-name" placeholder="e.g. Ravi Sharma"></div>
+                <div><label class="form-label">Email (@88gravity.com)</label><input class="form-control" id="sa-new-email" placeholder="ravi@88gravity.com"></div>
+                <div><label class="form-label">Role</label>
+                  <select class="form-select" id="sa-new-role" onchange="saRoleChange()">
+                    <option value="avp">AVP (Admin)</option>
+                    <option value="am">Account Manager</option>
+                    <option value="super_admin">Super Admin</option>
+                  </select>
+                </div>
+              </div>
+              <div id="sa-amid-row" style="display:none;margin-bottom:14px">
+                <label class="form-label">AM Profile</label>
+                <select class="form-select" id="sa-new-amid" style="max-width:280px">
+                  <option value="birbal">Birbal Sharma</option>
+                  <option value="ajay">Ajay Kumar</option>
+                  <option value="ambuj">Ambuj Surothiya</option>
+                </select>
+              </div>
+              <button class="btn btn-primary" onclick="saAddUser()">Add User</button>
+            </div>
+            <div class="card">
+              <div class="card-title">👥 All Users <button onclick="saLoadUsers()" style="background:var(--pale-blue);border:none;border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer;margin-left:8px">🔄 Refresh</button></div>
+              <div class="table-wrap"><table>
+                <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>AM ID</th><th>Added</th><th>Actions</th></tr></thead>
+                <tbody id="sa-users-tbody"><tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted)">Loading...</td></tr></tbody>
+              </table></div>
+            </div>
+          </div>
+
+          <!-- TASK TEMPLATES -->
+          <div id="sa-templates" class="sa-panel" style="display:none">
+            <div class="card">
+              <div class="card-title">📋 Task Template Library</div>
+              <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+                <select class="form-select" id="sa-tmpl-freq" style="width:160px" onchange="saLoadTemplates()">
+                  <option value="">All Frequencies</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="biweekly">Biweekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+                <select class="form-select" id="sa-tmpl-am" style="width:160px" onchange="saLoadTemplates()">
+                  <option value="">All AMs</option>
+                  <option value="birbal">Birbal</option>
+                  <option value="ajay">Ajay</option>
+                  <option value="ambuj">Ambuj</option>
+                </select>
+              </div>
+              <div class="table-wrap"><table>
+                <thead><tr><th>Task Name</th><th>Category</th><th>Freq</th><th>AMs</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody id="sa-tmpl-tbody"><tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted)">Loading...</td></tr></tbody>
+              </table></div>
+            </div>
+          </div>
+
+          <!-- SYSTEM SETTINGS -->
+          <div id="sa-settings" class="sa-panel" style="display:none">
+            <div class="card">
+              <div class="card-title">🔔 Deadline Alert Days</div>
+              <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Days of the month that trigger warning banners on the dashboard.</p>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+                <div><label class="form-label">📅 Content Calendar — Start Day</label><input class="form-control" type="number" id="s-cc-start" min="1" max="28" value="24"></div>
+                <div><label class="form-label">📅 Content Calendar — End Day</label><input class="form-control" type="number" id="s-cc-end" min="1" max="28" value="26"></div>
+                <div><label class="form-label">🚨 Monthly Reports — Start Day</label><input class="form-control" type="number" id="s-mr-start" min="1" max="10" value="2"></div>
+                <div><label class="form-label">🚨 Monthly Reports — End Day</label><input class="form-control" type="number" id="s-mr-end" min="1" max="10" value="4"></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-title">🏢 App Branding</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+                <div><label class="form-label">App Title</label><input class="form-control" id="s-app-title" value="88Gravity — SEO Team Dashboard"></div>
+                <div><label class="form-label">Team Name</label><input class="form-control" id="s-team-name" value="SEO Team"></div>
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="saSaveSettings()">💾 Save Settings</button>
+          </div>
+
+          <!-- AUDIT LOG -->
+          <div id="sa-audit" class="sa-panel" style="display:none">
+            <div class="card">
+              <div class="card-title">📜 Recent Activity <button onclick="saLoadAudit()" style="background:var(--pale-blue);border:none;border-radius:6px;padding:3px 10px;font-size:11px;cursor:pointer;margin-left:8px">🔄 Refresh</button></div>
+              <div class="table-wrap"><table>
+                <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Details</th></tr></thead>
+                <tbody id="sa-audit-tbody"><tr><td colspan="4" style="text-align:center;padding:20px;color:var(--muted)">Loading...</td></tr></tbody>
+              </table></div>
+            </div>
+          </div>
+        </div>
+
       </main>
     </div>
   </div>
@@ -984,7 +1105,8 @@ const firebaseConfig = {
 // 2. ROLE MAP — maps email → role & AM info
 // ================================================================
 const ROLE_MAP = {
-  "kuldeep@88gravity.com":       { role:"avp", name:"Kuldeep" },
+  "kuldeep@88gravity.com":       { role:"super_admin", name:"Kuldeep" },
+  "hubspot@88gravity.com":       { role:"avp",         name:"Hubspot Admin" },
   "birbal@88gravity.com":        { role:"am",  name:"Birbal Sharma",   amId:"birbal" },
   "ajay@88gravity.com":          { role:"am",  name:"Ajay Kumar",      amId:"ajay"   },
   "ambujsurothiya@88gravity.com":{ role:"am",  name:"Ambuj Surothiya", amId:"ambuj"  },
@@ -1215,7 +1337,7 @@ if (auth) {
 
     showScreen('app');
     initMonthlyDueSelects(); // populate all monthly schedule selects
-    if (currentRole === 'avp') initAVP();
+    if (currentRole === 'avp' || currentRole === 'super_admin') initAVP();
     else initAM();
   });
 }
@@ -1409,8 +1531,11 @@ async function ensureInstances(amId, projects, templates) {
 // ================================================================
 async function initAVP() {
   document.getElementById('avp-app').style.display = 'block';
-  document.getElementById('avp-name').textContent  = currentUser.displayName || 'Kuldeep';
+  document.getElementById('avp-name').textContent  = currentUser.displayName || currentUser.email.split('@')[0];
   document.getElementById('avp-email').textContent = currentUser.email;
+  // Show Super Admin nav button only for super_admin role
+  const saBtn = document.getElementById('sa-nav-btn');
+  if (saBtn) saBtn.style.display = (currentRole === 'super_admin') ? 'flex' : 'none';
   const now = new Date();
   document.getElementById('avp-date-display').textContent =
     `${dayName()}, ${now.toLocaleDateString('en-IN',{day:'2-digit',month:'long',year:'numeric'})} · Week ${getWeekNum(now)}`;
@@ -1448,6 +1573,7 @@ function avpNav(view, el) {
   if (view === 'tasklibrary') renderTaskLibraryTable();
   if (view === 'maptasks')    renderMapTasksView();
   if (view === 'users')       renderUsersTable();
+  if (view === 'superadmin')  initSuperAdmin();
   if (AM_CONFIG[view])        renderAMBoardAVP(view);
 }
 
@@ -4176,7 +4302,220 @@ document.addEventListener('click', function(e) {
 });
 
 // ================================================================
-// 12. TOAST
+// 12. SUPER ADMIN PANEL
+// ================================================================
+function initSuperAdmin() {
+  saLoadUsers();
+}
+
+function switchSATab(tab, btn) {
+  document.querySelectorAll('.sa-panel').forEach(p => { p.style.display='none'; p.classList.remove('active'); });
+  document.querySelectorAll('.sa-tab').forEach(b => b.classList.remove('active'));
+  const panel = document.getElementById('sa-' + tab);
+  if (panel) { panel.style.display = 'block'; panel.classList.add('active'); }
+  btn.classList.add('active');
+  if (tab === 'users')     saLoadUsers();
+  if (tab === 'templates') saLoadTemplates();
+  if (tab === 'settings')  saLoadSettings();
+  if (tab === 'audit')     saLoadAudit();
+}
+
+function saRoleChange() {
+  const role = document.getElementById('sa-new-role').value;
+  document.getElementById('sa-amid-row').style.display = (role === 'am') ? 'block' : 'none';
+}
+
+// ── USER MANAGEMENT ──────────────────────────────────────────────
+async function saLoadUsers() {
+  const tbody = document.getElementById('sa-users-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted)">Loading...</td></tr>';
+  try {
+    const snap = await db.collection('userRoles').orderBy('createdAt','desc').get();
+    if (snap.empty) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted)">No users added yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = snap.docs.map(d => {
+      const u = { uid: d.id, ...d.data() };
+      const roleLabel = { super_admin:'Super Admin', avp:'AVP', am:'AM' }[u.role] || u.role;
+      const chipClass = `rc-${u.role}`;
+      const added = u.createdAt ? new Date(u.createdAt.toDate()).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+      return `<tr>
+        <td><strong>${u.name||'—'}</strong></td>
+        <td style="font-size:12px">${u.email||'—'}</td>
+        <td><span class="role-chip ${chipClass}">${roleLabel}</span></td>
+        <td style="font-size:12px">${u.amId||'—'}</td>
+        <td style="font-size:12px">${added}</td>
+        <td><button onclick="saDeleteUser('${u.uid}','${(u.email||'').replace(/'/g,"\\'")}','${(u.name||'').replace(/'/g,"\\'")}') " style="background:#FADBD8;border:none;color:#c0392b;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">🗑 Remove</button></td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="6" style="color:var(--red);padding:16px">Error: ${e.message}</td></tr>`;
+  }
+}
+
+async function saAddUser() {
+  const name  = document.getElementById('sa-new-name').value.trim();
+  const email = document.getElementById('sa-new-email').value.trim().toLowerCase();
+  const role  = document.getElementById('sa-new-role').value;
+  const amId  = role === 'am' ? document.getElementById('sa-new-amid').value : null;
+  if (!name || !email) { toast('Please fill in name and email.','error'); return; }
+  if (!email.endsWith('@88gravity.com')) { toast('Email must be @88gravity.com','error'); return; }
+  try {
+    const docId = email.replace(/[@.]/g,'_');
+    await db.collection('userRoles').doc(docId).set({
+      name, email, role, amId: amId||null,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdBy: currentUser.email
+    });
+    saLogAudit('USER_ADDED', `Added ${email} as ${role}`);
+    toast(`✅ ${name} added successfully`,'success');
+    document.getElementById('sa-new-name').value = '';
+    document.getElementById('sa-new-email').value = '';
+    saLoadUsers();
+  } catch(e) { toast('Error: ' + e.message,'error'); }
+}
+
+async function saDeleteUser(uid, email, name) {
+  if (!confirm(`Remove access for ${name} (${email})?`)) return;
+  try {
+    await db.collection('userRoles').doc(uid).delete();
+    saLogAudit('USER_REMOVED', `Removed ${email}`);
+    toast(`✅ ${name} removed`,'success');
+    saLoadUsers();
+  } catch(e) { toast('Error: ' + e.message,'error'); }
+}
+
+// ── TASK TEMPLATES ────────────────────────────────────────────────
+async function saLoadTemplates() {
+  const tbody = document.getElementById('sa-tmpl-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted)">Loading...</td></tr>';
+  try {
+    const freqF = document.getElementById('sa-tmpl-freq')?.value || '';
+    const amF   = document.getElementById('sa-tmpl-am')?.value   || '';
+    let q = db.collection('taskTemplates');
+    if (freqF) q = q.where('freq','==',freqF);
+    const snap = await q.get();
+    let tmpls = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+    if (amF) tmpls = tmpls.filter(t => (t.ams||[]).includes(amF));
+    if (!tmpls.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted)">No templates found.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = tmpls.map(t => {
+      const active = t.active !== false;
+      const ams = (t.ams||[]).join(', ') || 'All';
+      return `<tr>
+        <td><strong>${t.name||'—'}</strong><br><small style="color:var(--muted);font-size:11px">${t.details||''}</small></td>
+        <td><span class="badge b-${t.category||''}">${t.category||'—'}</span></td>
+        <td style="font-size:12px">${t.freq||'—'}</td>
+        <td style="font-size:12px">${ams}</td>
+        <td><span style="color:${active?'var(--green)':'var(--red)'};font-weight:700;font-size:12px">${active?'Active':'Inactive'}</span></td>
+        <td style="white-space:nowrap">
+          <button onclick="saToggleTemplate('${t.id}',${!active})" style="background:#FEF9E7;border:none;color:#9a7d0a;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;margin-right:4px">${active?'Deactivate':'Activate'}</button>
+          <button onclick="saDeleteTemplate('${t.id}','${(t.name||'').replace(/'/g,"\\'")}') " style="background:#FADBD8;border:none;color:#c0392b;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">🗑</button>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="6" style="color:var(--red);padding:16px">Error: ${e.message}</td></tr>`;
+  }
+}
+
+async function saToggleTemplate(id, newState) {
+  try {
+    await db.collection('taskTemplates').doc(id).update({ active: newState });
+    saLogAudit('TEMPLATE_TOGGLED', `Template ${id} set active=${newState}`);
+    toast(`Template ${newState?'activated':'deactivated'}`,'success');
+    saLoadTemplates();
+  } catch(e) { toast('Error: '+e.message,'error'); }
+}
+
+async function saDeleteTemplate(id, name) {
+  if (!confirm(`Delete template "${name}"? This cannot be undone.`)) return;
+  try {
+    await db.collection('taskTemplates').doc(id).delete();
+    saLogAudit('TEMPLATE_DELETED', `Deleted: ${name}`);
+    toast(`✅ "${name}" deleted`,'success');
+    saLoadTemplates();
+  } catch(e) { toast('Error: '+e.message,'error'); }
+}
+
+// ── SYSTEM SETTINGS ───────────────────────────────────────────────
+async function saLoadSettings() {
+  try {
+    const doc = await db.collection('appSettings').doc('main').get();
+    if (doc.exists) {
+      const d = doc.data();
+      const set = (id, val) => { const el=document.getElementById(id); if(el) el.value=val; };
+      set('s-cc-start', d.ccStart||24); set('s-cc-end', d.ccEnd||26);
+      set('s-mr-start', d.mrStart||2); set('s-mr-end', d.mrEnd||4);
+      set('s-app-title', d.appTitle||'88Gravity — SEO Team Dashboard');
+      set('s-team-name', d.teamName||'SEO Team');
+    }
+  } catch(e) { console.warn('Settings load:', e.message); }
+}
+
+async function saSaveSettings() {
+  const gn = id => parseInt(document.getElementById(id)?.value)||0;
+  const gs = id => document.getElementById(id)?.value||'';
+  try {
+    await db.collection('appSettings').doc('main').set({
+      ccStart: gn('s-cc-start'), ccEnd: gn('s-cc-end'),
+      mrStart: gn('s-mr-start'), mrEnd: gn('s-mr-end'),
+      appTitle: gs('s-app-title'), teamName: gs('s-team-name'),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedBy: currentUser.email
+    }, { merge:true });
+    saLogAudit('SETTINGS_SAVED', 'System settings updated');
+    toast('✅ Settings saved!','success');
+  } catch(e) { toast('Error: '+e.message,'error'); }
+}
+
+// ── AUDIT LOG ─────────────────────────────────────────────────────
+async function saLogAudit(action, details) {
+  if (!db || !currentUser) return;
+  try {
+    await db.collection('auditLog').add({
+      action, details,
+      user: currentUser.displayName || currentUser.email,
+      email: currentUser.email,
+      timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  } catch(e) { /* non-fatal */ }
+}
+
+async function saLoadAudit() {
+  const tbody = document.getElementById('sa-audit-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--muted)">Loading...</td></tr>';
+  try {
+    const snap = await db.collection('auditLog').orderBy('timestamp','desc').limit(100).get();
+    if (snap.empty) {
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--muted)">No activity logged yet.</td></tr>';
+      return;
+    }
+    const colors = {LOGIN:'#D1F2EB',USER_ADDED:'#D5F5E3',USER_REMOVED:'#FADBD8',TEMPLATE_DELETED:'#FADBD8',TEMPLATE_TOGGLED:'#FEF9E7',SETTINGS_SAVED:'#D6EAF8',TASK_CREATED:'#EBD5F5'};
+    tbody.innerHTML = snap.docs.map(d => {
+      const r = d.data();
+      const ts = r.timestamp ? new Date(r.timestamp.toDate()).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
+      const bg = colors[r.action] || '#F0F4F8';
+      return `<tr>
+        <td style="font-size:12px;white-space:nowrap">${ts}</td>
+        <td style="font-size:12px">${r.user||r.email||'—'}</td>
+        <td><span class="audit-chip" style="background:${bg}">${r.action||'—'}</span></td>
+        <td style="font-size:12px">${r.details||'—'}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="4" style="color:var(--red);padding:16px">Error: ${e.message}</td></tr>`;
+  }
+}
+
+// ================================================================
+// 13. TOAST
 // ================================================================
 function toast(msg, type='success', duration=3500) {
   const c = document.getElementById('toast-container');
