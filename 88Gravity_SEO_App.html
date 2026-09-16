@@ -446,31 +446,6 @@ th.sortable.asc .sort-arrow,th.sortable.desc .sort-arrow{opacity:1;color:var(--m
               </div>
               <div class="form-row-2">
                 <div class="form-row">
-                  <label class="form-label">Project Name</label>
-                  <input class="form-input" id="f-proj-name" placeholder="e.g. ABC Corp">
-                </div>
-                <div class="form-row">
-                  <label class="form-label">Project Website URL</label>
-                  <input class="form-input" id="f-proj-url" placeholder="e.g. https://abccorp.com" type="url">
-                </div>
-              </div>
-              <div class="form-row">
-                <label class="form-label">Project Service Type</label>
-                <div class="multisel-wrap" id="f-service-wrap">
-                  <div class="multisel-trigger" id="f-service-trigger" onclick="toggleServiceDropdown()">
-                    <span id="f-service-label" style="color:var(--muted)">Select service types...</span>
-                    <span class="multisel-arrow">&#9662;</span>
-                  </div>
-                  <div class="multisel-dropdown" id="f-service-dropdown" style="display:none">
-                    <label class="multisel-item"><input type="checkbox" value="SEO" onchange="updateServiceLabel()"> SEO</label>
-                    <label class="multisel-item"><input type="checkbox" value="GMB" onchange="updateServiceLabel()"> GMB</label>
-                    <label class="multisel-item"><input type="checkbox" value="AI-SEO &amp; Citation" onchange="updateServiceLabel()"> AI-SEO &amp; Citation</label>
-                  </div>
-                </div>
-                <div class="multisel-tags" id="f-service-tags"></div>
-              </div>
-              <div class="form-row-2">
-                <div class="form-row">
                   <label class="form-label">Category *</label>
                   <select class="form-select" id="f-cat" required>
                     <option value="">Select category</option>
@@ -533,17 +508,15 @@ th.sortable.asc .sort-arrow,th.sortable.desc .sort-arrow{opacity:1;color:var(--m
                 <select class="form-select" id="f-due"><option value="">Select date/timing...</option></select>
               </div>
               <div class="form-row">
-                <label class="form-label">Assign to AMs *</label>
-                <div class="checkbox-group" id="f-ams">
-                  <label class="cb-item"><input type="checkbox" value="birbal" onchange="onAMSelect()"> Birbal Sharma</label>
-                  <label class="cb-item"><input type="checkbox" value="ajay" onchange="onAMSelect()"> Ajay Kumar</label>
-                  <label class="cb-item"><input type="checkbox" value="ambuj" onchange="onAMSelect()"> Ambuj Surothiya</label>
-                  <label class="cb-item"><input type="checkbox" id="f-all-ams" onchange="selectAllAMs()"> ✅ All AMs</label>
+                <label class="form-label">Select Projects to Assign *</label>
+                <div style="margin-bottom:6px">
+                  <input type="text" id="f-proj-search" placeholder="🔍 Search projects..." oninput="filterProjectOptions()" autocomplete="off"
+                    style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:13px">
                 </div>
-              </div>
-              <div class="form-row" id="f-projects-row" style="display:none">
-                <label class="form-label">Assign to Projects</label>
-                <div id="f-projects-container"></div>
+                <div id="f-proj-list" style="max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;background:var(--bg2);padding:4px 0">
+                  <div style="padding:10px;color:var(--muted);font-size:12px">Loading projects…</div>
+                </div>
+                <div id="f-proj-tags" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px"></div>
               </div>
               <div class="form-row">
                 <label class="form-label">Start From</label>
@@ -600,6 +573,10 @@ th.sortable.asc .sort-arrow,th.sortable.desc .sort-arrow{opacity:1;color:var(--m
                   </div>
                   <div class="multisel-tags" id="proj-service-tags"></div>
                 </div>
+                <div class="form-row">
+                  <label class="form-label">Onboarding Date</label>
+                  <input class="form-input" id="proj-onboarding-date" type="date" style="max-width:200px">
+                </div>
                 <div style="display:flex;gap:10px;margin-top:8px">
                   <button type="submit" class="btn btn-primary" id="proj-submit-btn">Onboard Project</button>
                   <button type="button" class="btn btn-outline" onclick="resetProjectForm()">Clear</button>
@@ -610,8 +587,8 @@ th.sortable.asc .sort-arrow,th.sortable.desc .sort-arrow{opacity:1;color:var(--m
             <div class="card">
               <div class="card-title">📁 All Projects <span id="proj-count" style="font-size:11px;font-weight:400;color:var(--muted)"></span></div>
               <div class="table-wrap">
-                <table><thead><tr><th>Project Name</th><th>Website</th><th>AM</th><th>Service Types</th><th></th></tr></thead>
-                <tbody id="projects-table-body"><tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">No projects yet.</td></tr></tbody>
+                <table><thead><tr><th>Project Name</th><th>Website</th><th>AM</th><th>Service Types</th><th>Onboarded</th><th>Status</th><th></th></tr></thead>
+                <tbody id="projects-table-body"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">No projects yet.</td></tr></tbody>
                 </table>
               </div>
             </div>
@@ -1572,6 +1549,7 @@ function avpNav(view, el) {
   if (view === 'projects')    renderProjectsList();
   if (view === 'tasklibrary') renderTaskLibraryTable();
   if (view === 'maptasks')    renderMapTasksView();
+  if (view === 'allocate')    populateProjectMultiSelect();
   if (view === 'users')       renderUsersTable();
   if (view === 'superadmin')  initSuperAdmin();
   if (AM_CONFIG[view])        renderAMBoardAVP(view);
@@ -2550,33 +2528,90 @@ function onFreqChange() {
   document.getElementById('f-due-row').style.display  = freq==='monthly'   ? 'block' : 'none';
 }
 
-function selectAllAMs() {
-  const checked = document.getElementById('f-all-ams').checked;
-  document.querySelectorAll('#f-ams input[type="checkbox"]:not(#f-all-ams)').forEach(cb => { cb.checked = checked; });
-  onAMSelect();
+// ---- Project Multi-Select for Allocate Task ----
+let _selectedProjIds = new Set();
+
+function populateProjectMultiSelect() {
+  _selectedProjIds = new Set();
+  _renderProjList('');
+  _renderProjTags();
+  const srch = document.getElementById('f-proj-search');
+  if (srch) srch.value = '';
 }
 
-function onAMSelect() {
-  const selected = [...document.querySelectorAll('#f-ams input[type="checkbox"]:not(#f-all-ams):checked')].map(cb=>cb.value);
-  const container = document.getElementById('f-projects-container');
-  const row = document.getElementById('f-projects-row');
-  if (selected.length === 0) { row.style.display='none'; return; }
-  row.style.display = 'block';
-  container.innerHTML = selected.map(amId => {
-    const cfg = AM_CONFIG[amId];
-    return `<div class="am-proj-group">
-      <div class="am-proj-group-title">${cfg.name}:</div>
-      <div class="checkbox-group">
-        <label class="cb-item"><input type="checkbox" class="proj-all-${amId}" onchange="selectAllProjs('${amId}')"> ✅ All Projects</label>
-        ${cfg.projects.map(p=>`<label class="cb-item"><input type="checkbox" class="proj-${amId}" value="${p}"> ${p}</label>`).join('')}
-      </div>
-    </div>`;
+function _renderProjList(filter) {
+  const list = document.getElementById('f-proj-list');
+  if (!list) return;
+  const activeProjs = allProjects.filter(p => p.status !== 'paused');
+  const filtered = filter
+    ? activeProjs.filter(p => (p.name||'').toLowerCase().includes(filter.toLowerCase()) ||
+        ((p.amId && AM_CONFIG[p.amId]) ? AM_CONFIG[p.amId].name : '').toLowerCase().includes(filter.toLowerCase()))
+    : activeProjs;
+  if (!filtered.length) {
+    list.innerHTML = '<div style="padding:10px;color:var(--muted);font-size:12px">' +
+      (allProjects.length ? 'No active projects match your search.' : 'No active projects. Add projects in the Projects section first.') + '</div>';
+    return;
+  }
+  // Select All row
+  const allChecked = filtered.every(p => _selectedProjIds.has(p.id));
+  list.innerHTML =
+    `<label class="cb-item" style="padding:6px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;cursor:pointer">
+      <input type="checkbox" id="f-proj-all" ${allChecked?'checked':''} onchange="toggleAllProjOptions()"> <strong>✅ Select All Active (${filtered.length})</strong>
+    </label>` +
+    filtered.map(p => {
+      const amName = (p.amId && AM_CONFIG[p.amId]) ? AM_CONFIG[p.amId].name : (p.amId||'—');
+      const checked = _selectedProjIds.has(p.id) ? 'checked' : '';
+      return `<label class="cb-item" style="padding:6px 10px;display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" class="f-proj-opt" value="${p.id}" ${checked} onchange="toggleProjOption('${p.id}', '${(p.name||'').replace(/'/g,"\\'")}', this)">
+        <span><strong style="font-size:12px">${p.name}</strong> <span style="color:var(--muted);font-size:11px">(${amName})</span></span>
+      </label>`;
+    }).join('');
+}
+
+function filterProjectOptions() {
+  const q = document.getElementById('f-proj-search')?.value || '';
+  _renderProjList(q);
+}
+
+function toggleProjOption(projId, projName, cb) {
+  if (cb.checked) _selectedProjIds.add(projId);
+  else _selectedProjIds.delete(projId);
+  // update Select All state
+  const allOpts = [...document.querySelectorAll('.f-proj-opt')];
+  const allChk = document.getElementById('f-proj-all');
+  if (allChk) allChk.checked = allOpts.length > 0 && allOpts.every(o => o.checked);
+  _renderProjTags();
+}
+
+function toggleAllProjOptions() {
+  const chk = document.getElementById('f-proj-all').checked;
+  document.querySelectorAll('.f-proj-opt').forEach(cb => {
+    cb.checked = chk;
+    if (chk) _selectedProjIds.add(cb.value);
+    else _selectedProjIds.delete(cb.value);
+  });
+  _renderProjTags();
+}
+
+function _renderProjTags() {
+  const tagsEl = document.getElementById('f-proj-tags');
+  if (!tagsEl) return;
+  if (!_selectedProjIds.size) { tagsEl.innerHTML = ''; return; }
+  tagsEl.innerHTML = [..._selectedProjIds].map(id => {
+    const p = allProjects.find(x => x.id === id);
+    const label = p ? p.name : id;
+    return `<span class="multisel-tag" style="display:inline-flex;align-items:center;gap:4px">${label}
+      <span onclick="removeProjTag('${id}')" style="cursor:pointer;font-size:14px;line-height:1">×</span></span>`;
   }).join('');
 }
 
-function selectAllProjs(amId) {
-  const allChecked = document.querySelector(`.proj-all-${amId}`).checked;
-  document.querySelectorAll(`.proj-${amId}`).forEach(cb => cb.checked = allChecked);
+function removeProjTag(projId) {
+  _selectedProjIds.delete(projId);
+  const cb = document.querySelector(`.f-proj-opt[value="${projId}"]`);
+  if (cb) cb.checked = false;
+  const allChk = document.getElementById('f-proj-all');
+  if (allChk) allChk.checked = false;
+  _renderProjTags();
 }
 
 async function submitTask(e) {
@@ -2592,28 +2627,31 @@ async function submitTask(e) {
     : freq==='biweekly'  ? ((document.getElementById('f-biw-occ')?.value||'1st+3rd')+'-'+(document.getElementById('f-biw-day')?.value||'Monday'))
     : 'Every Day';
 
-  const selectedAMs = [...document.querySelectorAll('#f-ams input[type="checkbox"]:not(#f-all-ams):checked')].map(cb=>cb.value);
-  if (!selectedAMs.length) { toast('Select at least one AM', 'error'); btn.disabled=false; btn.innerHTML='Allocate Task'; return; }
+  if (!_selectedProjIds.size) { toast('Select at least one project', 'error'); btn.disabled=false; btn.innerHTML='Allocate Task'; return; }
 
+  // Derive AM → [projectIds] mapping from selected projects
   const assignedToProjects = {};
-  selectedAMs.forEach(amId => {
-    const projs = [...document.querySelectorAll(`.proj-${amId}:checked`)].map(cb=>cb.value);
-    assignedToProjects[amId] = projs.length > 0 ? projs : AM_CONFIG[amId].projects; // default: all projects
+  [..._selectedProjIds].forEach(projId => {
+    const proj = allProjects.find(p => p.id === projId);
+    if (!proj || !proj.amId) return;
+    if (!assignedToProjects[proj.amId]) assignedToProjects[proj.amId] = [];
+    assignedToProjects[proj.amId].push(projId);
   });
+  const selectedAMs = Object.keys(assignedToProjects);
+  if (!selectedAMs.length) { toast('Selected projects have no assigned AM', 'error'); btn.disabled=false; btn.innerHTML='Allocate Task'; return; }
 
   const template = {
     name:             document.getElementById('f-name').value.trim(),
     detail:           document.getElementById('f-detail').value.trim(),
-    projectName:      document.getElementById('f-proj-name').value.trim(),
-    projectUrl:       document.getElementById('f-proj-url').value.trim(),
-    serviceTypes:     [...document.querySelectorAll('#f-service-dropdown input:checked')].map(c=>c.value),
+    serviceTypes:     [],
     category:         document.getElementById('f-cat').value,
     priority:         document.getElementById('f-prio').value,
     frequency:        baseFreq,
     day:              day,
-    due:              document.getElementById('f-due').value.trim(),
+    due:              document.getElementById('f-due')?.value.trim() || '',
     assignedToAMs:    selectedAMs,
     assignedToProjects,
+    selectedProjectIds: [..._selectedProjIds],
     active:           true,
     createdBy:        currentUser.uid,
     createdAt:        firebase.firestore.FieldValue.serverTimestamp(),
@@ -2643,7 +2681,8 @@ async function submitTask(e) {
       }
     }
 
-    toast(`✅ Task "${template.name}" allocated to ${selectedAMs.map(a=>AM_CONFIG[a].name).join(', ')}`, 'success');
+    const projNames = [..._selectedProjIds].map(id => (allProjects.find(p=>p.id===id)||{name:id}).name).join(', ');
+    toast(`✅ Task "${template.name}" allocated to: ${projNames}`, 'success');
     resetForm();
   } catch(err) {
     toast('Error: ' + err.message, 'error');
@@ -2656,11 +2695,11 @@ function resetForm() {
   document.getElementById('f-day-row').style.display='none';
   document.getElementById('f-biw-row').style.display='none';
   document.getElementById('f-due-row').style.display='none';
-  document.getElementById('f-projects-row').style.display='none';
-  document.querySelectorAll('#f-service-dropdown input').forEach(cb => cb.checked = false);
-  updateServiceLabel();
-  document.getElementById('f-service-dropdown').style.display = 'none';
-  document.getElementById('f-service-trigger').classList.remove('open');
+  // reset project multi-select
+  _selectedProjIds = new Set();
+  _renderProjTags();
+  const srch = document.getElementById('f-proj-search');
+  if (srch) { srch.value = ''; filterProjectOptions(); }
 }
 
 // ================================================================
@@ -3500,17 +3539,35 @@ function renderProjectsList() {
   const cnt = document.getElementById('proj-count');
   if (cnt) cnt.textContent = '(' + allProjects.length + ')';
   if (!allProjects.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:24px">No projects yet. Use the form to onboard your first project.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">No projects yet. Use the form to onboard your first project.</td></tr>';
     return;
   }
   tbody.innerHTML = allProjects.map(p => {
     const amName = (p.amId && AM_CONFIG[p.amId]) ? AM_CONFIG[p.amId].name : (p.amId||'—');
     const urlDisplay = p.url ? `<a href="${p.url}" target="_blank" style="color:var(--mid-blue);font-size:11px;word-break:break-all">${p.url}</a>` : '—';
+    const isPaused = p.status === 'paused';
+    const statusBtn = isPaused
+      ? `<button class="btn btn-sm" style="background:#6c757d;color:#fff;font-size:10px" onclick="toggleProjectStatus('${p.id}','paused')">⏸ Paused</button>`
+      : `<button class="btn btn-sm" style="background:#28a745;color:#fff;font-size:10px" onclick="toggleProjectStatus('${p.id}','active')">✅ Active</button>`;
+    const onboardDate = p.onboardingDate ? `<span style="font-size:11px">${p.onboardingDate}</span>` : '—';
     return `<tr><td><strong>${p.name||'—'}</strong></td><td>${urlDisplay}</td>`+
       `<td><strong style="font-size:12px">${amName}</strong></td>`+
       `<td>${svcTagHtml(p.serviceTypes)}</td>`+
+      `<td>${onboardDate}</td>`+
+      `<td>${statusBtn}</td>`+
       `<td style="white-space:nowrap"><button class="btn btn-sm btn-warning" onclick="openEditProject('${p.id}')" style="margin-right:4px">✏️</button><button class="btn btn-sm btn-danger" onclick="deleteProject('${p.id}')">🗑</button></td></tr>`;
   }).join('');
+}
+
+async function toggleProjectStatus(id, currentStatus) {
+  const newStatus = currentStatus === 'active' ? 'paused' : 'active';
+  try {
+    await db.collection('projects').doc(id).update({ status: newStatus });
+    const idx = allProjects.findIndex(p => p.id === id);
+    if (idx !== -1) allProjects[idx].status = newStatus;
+    renderProjectsList();
+    toast(`Project ${newStatus === 'active' ? '✅ activated' : '⏸ paused'}`, 'success');
+  } catch(err) { toast('Error: ' + err.message, 'error'); }
 }
 
 async function submitProject(e) {
@@ -3523,13 +3580,15 @@ async function submitProject(e) {
     btn.disabled=false; btn.innerHTML='Onboard Project'; return;
   }
   const project = {
-    name:         document.getElementById('proj-name').value.trim(),
-    url:          document.getElementById('proj-url').value.trim(),
-    amId:         document.getElementById('proj-am').value,
+    name:           document.getElementById('proj-name').value.trim(),
+    url:            document.getElementById('proj-url').value.trim(),
+    amId:           document.getElementById('proj-am').value,
     serviceTypes,
-    active:       true,
-    createdBy:    currentUser.uid,
-    createdAt:    firebase.firestore.FieldValue.serverTimestamp(),
+    onboardingDate: document.getElementById('proj-onboarding-date').value || '',
+    status:         'active',
+    active:         true,
+    createdBy:      currentUser.uid,
+    createdAt:      firebase.firestore.FieldValue.serverTimestamp(),
   };
   try {
     const ref = await db.collection('projects').add(project);
@@ -3551,6 +3610,8 @@ function resetProjectForm() {
   updateProjServiceLabel();
   document.getElementById('proj-service-dropdown').style.display='none';
   document.getElementById('proj-service-trigger').classList.remove('open');
+  const dateEl = document.getElementById('proj-onboarding-date');
+  if (dateEl) dateEl.value = '';
 }
 
 async function deleteProject(id) {
@@ -3943,6 +4004,17 @@ function openEditProject(id) {
         ${svcOpts.map(s=>`<label class="cb-item"><input type="checkbox" class="ep-svc" value="${s}"${(p.serviceTypes||[]).includes(s)?' checked':''}> ${s}</label>`).join('')}
       </div>
     </div>
+    <div class="form-row">
+      <label class="form-label">Onboarding Date</label>
+      <input class="form-input" id="ep-onboarding-date" type="date" value="${p.onboardingDate||''}" style="max-width:200px">
+    </div>
+    <div class="form-row">
+      <label class="form-label">Status</label>
+      <select class="form-select" id="ep-status" style="max-width:160px">
+        <option value="active"${(p.status||'active')==='active'?' selected':''}>✅ Active</option>
+        <option value="paused"${p.status==='paused'?' selected':''}>⏸ Paused</option>
+      </select>
+    </div>
     <div style="display:flex;gap:10px;margin-top:16px">
       <button class="btn btn-primary" onclick="saveEditProject('${id}')">&#x1F4BE; Save Changes</button>
       <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
@@ -3951,16 +4023,18 @@ function openEditProject(id) {
 }
 
 async function saveEditProject(id) {
-  const name         = document.getElementById('ep-name').value.trim();
-  const url          = document.getElementById('ep-url').value.trim();
-  const amId         = document.getElementById('ep-am').value;
-  const serviceTypes = [...document.querySelectorAll('.ep-svc:checked')].map(c=>c.value);
+  const name           = document.getElementById('ep-name').value.trim();
+  const url            = document.getElementById('ep-url').value.trim();
+  const amId           = document.getElementById('ep-am').value;
+  const serviceTypes   = [...document.querySelectorAll('.ep-svc:checked')].map(c=>c.value);
+  const onboardingDate = document.getElementById('ep-onboarding-date')?.value || '';
+  const status         = document.getElementById('ep-status')?.value || 'active';
   if (!name)              { toast('Project name is required','error'); return; }
   if (!serviceTypes.length){ toast('Select at least one service type','error'); return; }
   try {
-    await db.collection('projects').doc(id).update({name,url,amId,serviceTypes});
+    await db.collection('projects').doc(id).update({name,url,amId,serviceTypes,onboardingDate,status});
     const idx = allProjects.findIndex(p=>p.id===id);
-    if (idx!==-1) Object.assign(allProjects[idx],{name,url,amId,serviceTypes});
+    if (idx!==-1) Object.assign(allProjects[idx],{name,url,amId,serviceTypes,onboardingDate,status});
     allProjects.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
     renderProjectsList();
     populateMapProjectList();
