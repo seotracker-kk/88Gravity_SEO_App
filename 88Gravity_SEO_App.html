@@ -1430,6 +1430,7 @@ async function ensureInstances(amId, projects, templates) {
   let count = 0;
 
   templates.forEach(t => {
+    if (t.active === false) return;                          // skip deactivated templates
     const assignedProjects = t.assignedToProjects?.[amId] || [];
     if (!assignedProjects.length) return;
 
@@ -1835,9 +1836,8 @@ function refreshAndRenderAllTasks() {
 }
 
 async function loadTemplates() {
-  const snap = await db.collection('taskTemplates').where('active','==',true).get();
+  const snap = await db.collection('taskTemplates').get();
   allTemplates = snap.docs.map(d => ({id:d.id,...d.data()}));
-  if (allTemplates.length === 0) await seedDefaultTasks();
 }
 
 function subscribeAVPInstances() {
