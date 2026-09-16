@@ -878,7 +878,7 @@ th.sortable.asc .sort-arrow,th.sortable.desc .sort-arrow{opacity:1;color:var(--m
                 <button onclick="saFindDuplicates()" style="background:#FEF9E7;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;color:#9a7d0a">🔍 Find Duplicates</button>
                 <button onclick="saRemoveDuplicates()" style="background:#FDEBD0;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;color:#b7770d">🧹 Auto-Remove Duplicates</button>
                 <button onclick="saDeleteSelected()" style="background:#FADBD8;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;color:#c0392b">🗑 Delete Selected</button>
-                <button onclick="saCleanDuplicateInstances()" style="background:#e8d5f5;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;color:#6c3483">⚡ Clean Duplicate Tasks (This Period)</button>
+                <button onclick="saResetAndRebuild()" style="background:#1a5276;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;color:#fff">🔄 Reset &amp; Rebuild This Period</button>
                 <div style="flex:1"></div>
                 <button onclick="saClearAllAssignments()" style="background:#c0392b;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;color:#fff">💥 Clear ALL Assignments</button>
               </div>
@@ -1400,14 +1400,16 @@ function initMonthlyDueSelects() {
 // ================================================================
 // 7. TASK ENGINE — Generate recurring instances
 // ================================================================
-function getInstanceId(templateId, amId, project, freq) {
-  const safe = project.replace(/\s+/g,'_');
+function getInstanceId(taskName, amId, project, freq) {
+  // Use task NAME (not templateId) so duplicate templates collapse to one instance
+  const safeName = (taskName||'task').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+  const safeProj = project.replace(/\s+/g,'_');
   let period;
   if (freq.startsWith('daily')) period = todayStr();
   else if (freq === 'weekly')   period = weekKey();
-  else if (freq === 'biweekly') period = monthKey(); // biweekly now month-based
+  else if (freq === 'biweekly') period = monthKey();
   else                          period = monthKey();
-  return `${templateId}__${amId}__${safe}__${period}`;
+  return `${safeName}__${amId}__${safeProj}__${period}`;
 }
 
 async function ensureInstances(amId, projects, templates) {
@@ -1458,7 +1460,7 @@ async function ensureInstances(amId, projects, templates) {
 
     assignedProjects.forEach(proj => {
       if (!projects.includes(proj)) return;
-      const id = getInstanceId(t.id, amId, proj, freq);
+      const id = getInstanceId(t.name, amId, proj, freq);
       const ref = db.collection('taskInstances').doc(id);
       batch.set(ref, {
         templateId: t.id, amId, project: proj, name: t.name,
@@ -3964,7 +3966,7 @@ async function submitMapTask(e) {
           if (skipDay) continue;
           const instBatch = db.batch();
           projects.forEach(proj => {
-            const instId = getInstanceId(docRef.id, amId, proj, baseFreq);
+            const instId = getInstanceId(template.name, amId, proj, baseFreq);
             instBatch.set(db.collection('taskInstances').doc(instId), {
               templateId: docRef.id, amId, project: proj,
               name: template.name, detail: template.detail||'',
@@ -4681,6 +4683,61 @@ async function saClearAllAssignments() {
   saLogAudit('CLEAR_ALL_ASSIGNMENTS', `Cleared all ${deleted} task assignments`);
   toast(`✅ All ${deleted} assignments cleared. Use Map Tasks to create fresh assignments.`,'success');
   await saLoadTemplates();
+}
+
+// ── RESET & REBUILD ───────────────────────────────────────────────
+// Deletes ALL current-period instances + periodInit markers,
+// then runs ensureInstances fresh with name-based IDs → no duplicates
+async function saResetAndRebuild() {
+  if (!confirm('This will:\n1. Delete all task instances for the current period\n2. Delete period init markers\n3. Rebuild fresh tasks with no duplicates\n\nAM boards will show clean tasks immediately.\n\nProceed?')) return;
+
+  const statusEl = document.getElementById('sa-tmpl-status');
+  if (statusEl) statusEl.innerHTML = '<span class="spinner"></span> Step 1/3: Deleting current period instances...';
+
+  try {
+    const dayK = todayStr(), wk = weekKey(), bwk = biWeekKey(), moK = monthKey();
+    const periodKeys = [dayK, wk, bwk, moK];
+
+    // Step 1: Delete all taskInstances for current periods
+    const snap = await db.collection('taskInstances')
+      .where('periodKey', 'in', periodKeys).get();
+    let deletedInst = 0;
+    for (let i = 0; i < snap.docs.length; i += 400) {
+      const b = db.batch();
+      snap.docs.slice(i, i+400).forEach(d => { b.delete(d.ref); deletedInst++; });
+      await b.commit();
+    }
+
+    if (statusEl) statusEl.innerHTML = `<span class="spinner"></span> Step 2/3: Deleting ${snap.docs.length} old instances... clearing period markers...`;
+
+    // Step 2: Delete all periodInit markers for all AMs so ensureInstances runs fresh
+    const initSnap = await db.collection('periodInit').get();
+    if (initSnap.docs.length) {
+      const b2 = db.batch();
+      initSnap.docs.forEach(d => b2.delete(d.ref));
+      await b2.commit();
+    }
+
+    if (statusEl) statusEl.innerHTML = '<span class="spinner"></span> Step 3/3: Rebuilding clean tasks...';
+
+    // Step 3: Reload templates and rebuild instances (now using name-based IDs)
+    await loadTemplates();
+    await loadProjects();
+    for (const amId of Object.keys(AM_CONFIG)) {
+      const fsProjNames = allProjects.filter(p => p.amId === amId).map(p => p.name);
+      const cfg = AM_CONFIG[amId];
+      const projsForAM = fsProjNames.length ? fsProjNames : (cfg?.projects || []);
+      await ensureInstances(amId, projsForAM, allTemplates);
+    }
+
+    saLogAudit('RESET_REBUILD', `Reset & rebuilt all instances: deleted ${deletedInst} old, rebuilt fresh`);
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--green);font-weight:600">✅ Done! Deleted ${deletedInst} old instances and rebuilt fresh. Reload the page to see clean AM boards.</span>`;
+    toast('✅ Reset complete — AM boards now have clean, deduplicated tasks', 'success');
+
+  } catch(e) {
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--red)">Error: ${e.message}</span>`;
+    toast('Error: ' + e.message, 'error');
+  }
 }
 
 // Clean duplicate taskInstances for the current period across all AMs
