@@ -869,29 +869,52 @@ th.sortable.asc .sort-arrow,th.sortable.desc .sort-arrow{opacity:1;color:var(--m
             </div>
           </div>
 
-          <!-- TASK TEMPLATES -->
+          <!-- TASK ASSIGNMENTS MANAGER -->
           <div id="sa-templates" class="sa-panel" style="display:none">
-            <div class="card">
-              <div class="card-title">📋 Task Template Library</div>
-              <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
-                <select class="form-select" id="sa-tmpl-freq" style="width:160px" onchange="saLoadTemplates()">
-                  <option value="">All Frequencies</option>
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="biweekly">Biweekly</option>
-                  <option value="monthly">Monthly</option>
-                </select>
-                <select class="form-select" id="sa-tmpl-am" style="width:160px" onchange="saLoadTemplates()">
-                  <option value="">All AMs</option>
-                  <option value="birbal">Birbal</option>
-                  <option value="ajay">Ajay</option>
-                  <option value="ambuj">Ambuj</option>
-                </select>
+            <!-- Action bar -->
+            <div class="card" style="margin-bottom:14px;padding:14px 18px">
+              <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+                <button onclick="saLoadTemplates()" style="background:var(--pale-blue);border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;color:var(--dark-blue)">🔄 Refresh</button>
+                <button onclick="saFindDuplicates()" style="background:#FEF9E7;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;color:#9a7d0a">🔍 Find Duplicates</button>
+                <button onclick="saRemoveDuplicates()" style="background:#FDEBD0;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;color:#b7770d">🧹 Auto-Remove Duplicates</button>
+                <button onclick="saDeleteSelected()" style="background:#FADBD8;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;color:#c0392b">🗑 Delete Selected</button>
+                <div style="flex:1"></div>
+                <button onclick="saClearAllAssignments()" style="background:#c0392b;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;color:#fff">💥 Clear ALL Assignments</button>
               </div>
-              <div class="table-wrap"><table>
-                <thead><tr><th>Task Name</th><th>Category</th><th>Freq</th><th>AMs</th><th>Status</th><th>Actions</th></tr></thead>
-                <tbody id="sa-tmpl-tbody"><tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted)">Loading...</td></tr></tbody>
-              </table></div>
+              <div id="sa-tmpl-status" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>
+            </div>
+
+            <!-- Filters -->
+            <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+              <input type="text" id="sa-tmpl-search" placeholder="🔍 Search task name..." oninput="saRenderTemplateTable()"
+                style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--text);font-size:13px;width:220px">
+              <select class="form-select" id="sa-tmpl-am" style="width:160px" onchange="saRenderTemplateTable()">
+                <option value="">All AMs</option>
+              </select>
+              <select class="form-select" id="sa-tmpl-freq" style="width:160px" onchange="saRenderTemplateTable()">
+                <option value="">All Frequencies</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="biweekly">Biweekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+              <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px">
+                <input type="checkbox" id="sa-tmpl-dupes-only" onchange="saRenderTemplateTable()"> Show duplicates only
+              </label>
+              <span id="sa-tmpl-count" style="font-size:12px;color:var(--muted);margin-left:auto"></span>
+            </div>
+
+            <!-- Table -->
+            <div class="card" style="padding:0">
+              <div class="table-wrap">
+                <table>
+                  <thead><tr>
+                    <th style="width:36px"><input type="checkbox" id="sa-tmpl-chk-all" onchange="saToggleAllTmplChk(this)"></th>
+                    <th>Task Name</th><th>Category</th><th>Frequency</th><th>Assigned AMs</th><th>Projects</th><th>Status</th><th>Actions</th>
+                  </tr></thead>
+                  <tbody id="sa-tmpl-tbody"><tr><td colspan="8" style="text-align:center;padding:20px;color:var(--muted)">Click Refresh to load assignments.</td></tr></tbody>
+                </table>
+              </div>
             </div>
           </div>
 
@@ -4383,6 +4406,7 @@ function switchSATab(tab, btn) {
   if (tab === 'templates') saLoadTemplates();
   if (tab === 'settings')  saLoadSettings();
   if (tab === 'audit')     saLoadAudit();
+  if (tab === 'templates') _saPopulateAMFilter();
 }
 
 function saRoleChange() {
@@ -4452,41 +4476,210 @@ async function saDeleteUser(uid, email, name) {
   } catch(e) { toast('Error: ' + e.message,'error'); }
 }
 
-// ── TASK TEMPLATES ────────────────────────────────────────────────
+// ── TASK ASSIGNMENTS MANAGER ──────────────────────────────────────
+let _saAllTemplates = [];  // raw list from Firestore
+let _saDuplicateIds = new Set(); // IDs flagged as duplicates
+
+function _saPopulateAMFilter() {
+  const sel = document.getElementById('sa-tmpl-am');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">All AMs</option>' +
+    Object.keys(AM_CONFIG).map(id => `<option value="${id}">${AM_CONFIG[id].name}</option>`).join('');
+}
+
 async function saLoadTemplates() {
   const tbody = document.getElementById('sa-tmpl-tbody');
+  const statusEl = document.getElementById('sa-tmpl-status');
   if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted)">Loading...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--muted)"><span class="spinner"></span> Loading...</td></tr>';
+  _saPopulateAMFilter();
   try {
-    const freqF = document.getElementById('sa-tmpl-freq')?.value || '';
-    const amF   = document.getElementById('sa-tmpl-am')?.value   || '';
-    let q = db.collection('taskTemplates');
-    if (freqF) q = q.where('freq','==',freqF);
-    const snap = await q.get();
-    let tmpls = snap.docs.map(d => ({ id:d.id, ...d.data() }));
-    if (amF) tmpls = tmpls.filter(t => (t.ams||[]).includes(amF));
-    if (!tmpls.length) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted)">No templates found.</td></tr>';
-      return;
-    }
-    tbody.innerHTML = tmpls.map(t => {
-      const active = t.active !== false;
-      const ams = (t.ams||[]).join(', ') || 'All';
-      return `<tr>
-        <td><strong>${t.name||'—'}</strong><br><small style="color:var(--muted);font-size:11px">${t.details||''}</small></td>
-        <td><span class="badge b-${t.category||''}">${t.category||'—'}</span></td>
-        <td style="font-size:12px">${t.freq||'—'}</td>
-        <td style="font-size:12px">${ams}</td>
-        <td><span style="color:${active?'var(--green)':'var(--red)'};font-weight:700;font-size:12px">${active?'Active':'Inactive'}</span></td>
-        <td style="white-space:nowrap">
-          <button onclick="saToggleTemplate('${t.id}',${!active})" style="background:#FEF9E7;border:none;color:#9a7d0a;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;margin-right:4px">${active?'Deactivate':'Activate'}</button>
-          <button onclick="saDeleteTemplate('${t.id}','${(t.name||'').replace(/'/g,"\\'")}') " style="background:#FADBD8;border:none;color:#c0392b;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">🗑</button>
-        </td>
-      </tr>`;
-    }).join('');
+    const snap = await db.collection('taskTemplates').get();
+    _saAllTemplates = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    _saDuplicateIds = new Set();
+    if (statusEl) statusEl.textContent = `Loaded ${_saAllTemplates.length} assignment(s).`;
+    saRenderTemplateTable();
   } catch(e) {
-    tbody.innerHTML = `<tr><td colspan="6" style="color:var(--red);padding:16px">Error: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="color:var(--red);padding:16px">Error: ${e.message}</td></tr>`;
   }
+}
+
+function saRenderTemplateTable() {
+  const tbody = document.getElementById('sa-tmpl-tbody');
+  if (!tbody) return;
+  const q    = (document.getElementById('sa-tmpl-search')?.value || '').toLowerCase();
+  const amF  = document.getElementById('sa-tmpl-am')?.value  || '';
+  const frqF = document.getElementById('sa-tmpl-freq')?.value || '';
+  const dupesOnly = document.getElementById('sa-tmpl-dupes-only')?.checked || false;
+
+  let list = _saAllTemplates.filter(t => {
+    if (q   && !(t.name||'').toLowerCase().includes(q)) return false;
+    if (amF  && !(t.assignedToAMs||[]).includes(amF))   return false;
+    if (frqF && t.frequency !== frqF)                   return false;
+    if (dupesOnly && !_saDuplicateIds.has(t.id))        return false;
+    return true;
+  });
+
+  const cntEl = document.getElementById('sa-tmpl-count');
+  if (cntEl) cntEl.textContent = `${list.length} of ${_saAllTemplates.length} assignments`;
+
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">No assignments found. Use "Map Tasks" to create assignments.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = list.map(t => {
+    const active   = t.active !== false;
+    const amsArr   = t.assignedToAMs || [];
+    const amNames  = amsArr.map(id => (AM_CONFIG[id]?.name || id).split(' ')[0]).join(', ') || '—';
+    const freqDisp = t.frequency ? (t.frequency.charAt(0).toUpperCase()+t.frequency.slice(1)) + (t.day && t.day!=='Every Day'?' · '+t.day:'') : '—';
+    // Build project list
+    const projMap  = t.assignedToProjects || {};
+    const projList = Object.values(projMap).flat().join(', ') || '—';
+    const isDupe   = _saDuplicateIds.has(t.id);
+    const rowStyle = isDupe ? 'background:#fff3cd' : '';
+    const dupeBadge = isDupe ? '<span style="background:#f39c12;color:#fff;font-size:10px;border-radius:4px;padding:1px 5px;margin-left:4px">DUPE</span>' : '';
+    return `<tr style="${rowStyle}">
+      <td><input type="checkbox" class="sa-tmpl-chk" value="${t.id}"></td>
+      <td><strong style="font-size:12px">${t.name||'—'}</strong>${dupeBadge}<br><span style="font-size:10px;color:var(--muted)">${t.taskLibraryId?'📚 from library':''}</span></td>
+      <td><span class="badge ${CAT_CLASS[t.category]||''}">${t.category||'—'}</span></td>
+      <td style="font-size:11px">${freqDisp}</td>
+      <td style="font-size:12px">${amNames}</td>
+      <td style="font-size:11px;max-width:180px;word-break:break-word">${projList}</td>
+      <td><span style="color:${active?'var(--green)':'var(--red)'};font-weight:700;font-size:12px">${active?'✅ Active':'⏸ Off'}</span></td>
+      <td style="white-space:nowrap">
+        <button onclick="saToggleTemplate('${t.id}',${!active})" style="background:#FEF9E7;border:none;color:#9a7d0a;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;margin-right:4px">${active?'Off':'On'}</button>
+        <button onclick="saDeleteTemplate('${t.id}','${(t.name||'').replace(/'/g,"\\'")}') " style="background:#FADBD8;border:none;color:#c0392b;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer">🗑</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function saToggleAllTmplChk(masterCb) {
+  document.querySelectorAll('.sa-tmpl-chk').forEach(cb => cb.checked = masterCb.checked);
+}
+
+// Find duplicates: same task name + overlapping AM
+function saFindDuplicates() {
+  _saDuplicateIds = new Set();
+  // Group by lowercase name
+  const groups = {};
+  _saAllTemplates.forEach(t => {
+    const key = (t.name||'').toLowerCase().trim();
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(t);
+  });
+  let dupeCount = 0;
+  Object.values(groups).forEach(group => {
+    if (group.length < 2) return;
+    // Check if any two entries share an AM
+    for (let i = 0; i < group.length; i++) {
+      for (let j = i+1; j < group.length; j++) {
+        const amsA = group[i].assignedToAMs || [];
+        const amsB = group[j].assignedToAMs || [];
+        const overlap = amsA.some(a => amsB.includes(a));
+        if (overlap) {
+          _saDuplicateIds.add(group[i].id);
+          _saDuplicateIds.add(group[j].id);
+        }
+      }
+    }
+    if (_saDuplicateIds.has(group[0].id)) dupeCount++;
+  });
+  const statusEl = document.getElementById('sa-tmpl-status');
+  if (_saDuplicateIds.size === 0) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--green);font-weight:600">✅ No duplicates found! All assignments are unique.</span>';
+    toast('✅ No duplicates found','success');
+  } else {
+    if (statusEl) statusEl.innerHTML = `<span style="color:#e67e22;font-weight:600">⚠️ Found ${_saDuplicateIds.size} duplicate assignment(s) — highlighted in yellow below.</span>`;
+    toast(`⚠️ ${_saDuplicateIds.size} duplicates found — check the yellow rows`, 'error');
+    // Auto-enable "show duplicates only" filter
+    const cb = document.getElementById('sa-tmpl-dupes-only');
+    if (cb) cb.checked = true;
+  }
+  saRenderTemplateTable();
+}
+
+// Auto-remove duplicates — for each group of same-name+same-AM, keep the newest, delete the rest
+async function saRemoveDuplicates() {
+  saFindDuplicates();
+  if (_saDuplicateIds.size === 0) { toast('No duplicates to remove','success'); return; }
+  if (!confirm(`Auto-remove ${_saDuplicateIds.size} duplicate assignments? For each duplicate group, the most recent assignment is kept.`)) return;
+
+  const statusEl = document.getElementById('sa-tmpl-status');
+  if (statusEl) statusEl.innerHTML = '<span class="spinner"></span> Removing duplicates...';
+
+  // Group by name, then per AM, keep newest
+  const groups = {};
+  _saAllTemplates.forEach(t => {
+    const key = (t.name||'').toLowerCase().trim();
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(t);
+  });
+
+  const toDelete = new Set();
+  Object.values(groups).forEach(group => {
+    if (group.length < 2) return;
+    // For each AM that appears in multiple entries, keep the one with the latest createdAt
+    const amMap = {}; // amId → [template, ...]
+    group.forEach(t => {
+      (t.assignedToAMs||[]).forEach(amId => {
+        if (!amMap[amId]) amMap[amId] = [];
+        amMap[amId].push(t);
+      });
+    });
+    Object.values(amMap).forEach(entries => {
+      if (entries.length < 2) return;
+      // Sort by createdAt descending, keep first, mark rest for deletion
+      entries.sort((a,b) => {
+        const ta = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+        const tb = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+        return tb - ta;
+      });
+      entries.slice(1).forEach(t => toDelete.add(t.id));
+    });
+  });
+
+  let deleted = 0;
+  for (const id of [...toDelete]) {
+    try { await db.collection('taskTemplates').doc(id).delete(); deleted++; } catch(e) {}
+  }
+  saLogAudit('DUPLICATES_REMOVED', `Auto-removed ${deleted} duplicate task assignments`);
+  if (statusEl) statusEl.innerHTML = `<span style="color:var(--green);font-weight:600">✅ Removed ${deleted} duplicate(s). Refreshing...</span>`;
+  toast(`✅ Removed ${deleted} duplicate assignment(s)`,'success');
+  await saLoadTemplates();
+}
+
+// Bulk delete selected rows
+async function saDeleteSelected() {
+  const checked = [...document.querySelectorAll('.sa-tmpl-chk:checked')].map(cb => cb.value);
+  if (!checked.length) { toast('Select at least one assignment first','error'); return; }
+  if (!confirm(`Delete ${checked.length} selected assignment(s)? Their tasks will stop being created next period.`)) return;
+  const statusEl = document.getElementById('sa-tmpl-status');
+  if (statusEl) statusEl.innerHTML = `<span class="spinner"></span> Deleting ${checked.length} assignments...`;
+  let deleted = 0;
+  for (const id of checked) {
+    try { await db.collection('taskTemplates').doc(id).delete(); deleted++; } catch(e) {}
+  }
+  saLogAudit('BULK_DELETED', `Bulk-deleted ${deleted} task assignments`);
+  toast(`✅ Deleted ${deleted} assignment(s)`,'success');
+  await saLoadTemplates();
+}
+
+// Nuclear: delete ALL task assignments
+async function saClearAllAssignments() {
+  if (!confirm('⚠️ WARNING: This will delete ALL recurring task assignments.\n\nAMs will no longer receive any tasks next period.\n\nType OK to confirm.')) return;
+  const second = prompt('Type CONFIRM to delete all assignments:');
+  if ((second||'').trim().toUpperCase() !== 'CONFIRM') { toast('Cancelled','success'); return; }
+  const statusEl = document.getElementById('sa-tmpl-status');
+  if (statusEl) statusEl.innerHTML = '<span class="spinner"></span> Deleting all assignments...';
+  let deleted = 0;
+  for (const t of _saAllTemplates) {
+    try { await db.collection('taskTemplates').doc(t.id).delete(); deleted++; } catch(e) {}
+  }
+  saLogAudit('CLEAR_ALL_ASSIGNMENTS', `Cleared all ${deleted} task assignments`);
+  toast(`✅ All ${deleted} assignments cleared. Use Map Tasks to create fresh assignments.`,'success');
+  await saLoadTemplates();
 }
 
 async function saToggleTemplate(id, newState) {
@@ -4494,17 +4687,20 @@ async function saToggleTemplate(id, newState) {
     await db.collection('taskTemplates').doc(id).update({ active: newState });
     saLogAudit('TEMPLATE_TOGGLED', `Template ${id} set active=${newState}`);
     toast(`Template ${newState?'activated':'deactivated'}`,'success');
-    saLoadTemplates();
+    const t = _saAllTemplates.find(x => x.id === id);
+    if (t) t.active = newState;
+    saRenderTemplateTable();
   } catch(e) { toast('Error: '+e.message,'error'); }
 }
 
 async function saDeleteTemplate(id, name) {
-  if (!confirm(`Delete template "${name}"? This cannot be undone.`)) return;
+  if (!confirm(`Delete assignment "${name}"?\n\nThis task will stop being created for future periods.`)) return;
   try {
     await db.collection('taskTemplates').doc(id).delete();
+    _saAllTemplates = _saAllTemplates.filter(t => t.id !== id);
     saLogAudit('TEMPLATE_DELETED', `Deleted: ${name}`);
     toast(`✅ "${name}" deleted`,'success');
-    saLoadTemplates();
+    saRenderTemplateTable();
   } catch(e) { toast('Error: '+e.message,'error'); }
 }
 
