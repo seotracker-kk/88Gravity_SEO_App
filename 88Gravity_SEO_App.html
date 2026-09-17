@@ -2729,7 +2729,25 @@ function resetForm() {
 // ================================================================
 async function initAM() {
   document.getElementById('am-app').style.display = 'flex';
-  const cfg = AM_CONFIG[currentAmId];
+
+  // Load AM configs first so AM_CONFIG is populated
+  await loadAMConfigs();
+
+  // Build a safe fallback cfg from Firestore appUsers if AM_CONFIG still missing
+  let cfg = AM_CONFIG[currentAmId];
+  if (!cfg) {
+    try {
+      const uSnap = await db.collection('appUsers')
+        .where('amId','==',currentAmId).limit(1).get();
+      if (!uSnap.empty) {
+        const d = uSnap.docs[0].data();
+        cfg = { name: d.name||currentAmId, email: d.email||'', projects:[], color:'linear-gradient(135deg,#1E3A5F,#2E86AB)' };
+        AM_CONFIG[currentAmId] = cfg;
+      }
+    } catch(e) {}
+    if (!cfg) cfg = { name: currentAmId, email: '', projects:[], color:'linear-gradient(135deg,#1E3A5F,#2E86AB)' };
+  }
+
   document.getElementById('am-display-name').textContent  = cfg.name;
   document.getElementById('am-display-email').textContent = cfg.email;
   // Set avatar initials
@@ -2739,18 +2757,18 @@ async function initAM() {
     avatarEl.textContent = parts.length>=2 ? parts[0][0]+parts[1][0] : cfg.name.substring(0,2).toUpperCase();
   }
 
-  // Load projects from Firestore (fall back to AM_CONFIG if none)
+  // Load active projects from Firestore (exclude paused)
   try {
     const pSnap = await db.collection('projects').where('amId','==',currentAmId).get();
-    const fsProjects = pSnap.docs.map(d=>d.data().name).filter(Boolean);
-    myProjects = fsProjects.length ? fsProjects : [...cfg.projects];
-  } catch(e) { myProjects = [...cfg.projects]; }
+    const fsProjects = pSnap.docs.map(d=>d.data()).filter(d=>d.status!=='paused').map(d=>d.name).filter(Boolean);
+    myProjects = fsProjects.length ? fsProjects : [...(cfg.projects||[])];
+  } catch(e) { myProjects = [...(cfg.projects||[])]; }
 
-  // Load templates and generate instances
+  // Load templates — get all, filter active ones in JS (avoids missing 'active' field issues)
   const snap = await db.collection('taskTemplates')
-    .where('assignedToAMs','array-contains',currentAmId)
-    .where('active','==',true).get();
-  const templates = snap.docs.map(d=>({id:d.id,...d.data()}));
+    .where('assignedToAMs','array-contains',currentAmId).get();
+  const templates = snap.docs.map(d=>({id:d.id,...d.data()}))
+    .filter(t => t.active !== false);  // treat missing field as active
 
   await ensureInstances(currentAmId, myProjects, templates);
   subscribeAMInstances();
